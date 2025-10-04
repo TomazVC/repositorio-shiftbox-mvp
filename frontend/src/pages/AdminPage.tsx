@@ -47,6 +47,51 @@ const AdminPage = () => {
     // Aqui seria feita a lógica real de aprovação/rejeição
   }
 
+  const handleExportReports = () => {
+    // Gerar relatório em CSV
+    const reportData = `
+Data do Relatório: ${new Date().toLocaleDateString('pt-BR')}
+
+RESUMO DE DISTRIBUIÇÕES
+======================
+Total de Distribuições: ${distributions.length}
+Distribuições Concluídas: ${distributions.filter(d => d.status === 'completed').length}
+Distribuições Pendentes: ${distributions.filter(d => d.status === 'pending').length}
+
+VALORES
+=======
+Total Distribuído: R$ ${distributions.filter(d => d.status === 'completed').reduce((sum, d) => sum + d.investor_amount, 0).toLocaleString()}
+Total Pendente: R$ ${distributions.filter(d => d.status === 'pending').reduce((sum, d) => sum + d.investor_amount, 0).toLocaleString()}
+
+DETALHES DAS DISTRIBUIÇÕES
+=========================
+${distributions.map(d => 
+  `#${d.id} - ${d.distribution_date} - R$ ${d.investor_amount.toLocaleString()} - ${d.status}`
+).join('\n')}
+    `
+
+    // Criar e baixar arquivo
+    const blob = new Blob([reportData], { type: 'text/plain;charset=utf-8' })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `relatorio-admin-${new Date().toISOString().split('T')[0]}.txt`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+    
+    alert('Relatório exportado com sucesso!')
+  }
+
+  const handleShowSettings = () => {
+    alert('Configurações do Sistema:\n\n• Taxa da Plataforma: 5%\n• Reserva de Segurança: 2%\n• Limite de Empréstimo: R$ 100.000\n• Taxa de Juros Base: 2.5% a.m.\n\n(Funcionalidade em desenvolvimento)')
+  }
+
+  const handleShowNotifications = () => {
+    alert('Notificações Recentes:\n\n🔔 3 novas solicitações de empréstimo\n🔔 2 distribuições pendentes\n🔔 1 evento de segurança para investigar\n🔔 Sistema funcionando normalmente\n\n(Central de notificações em desenvolvimento)')
+  }
+
   return (
     <div className="max-w-7xl mx-auto p-6">
       {/* Header */}
@@ -152,15 +197,27 @@ const AdminPage = () => {
       <div className="mt-12 bg-gray-50 rounded-lg p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Ações Rápidas</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Button variant="secondary" className="flex items-center justify-center">
+          <Button 
+            variant="secondary" 
+            className="flex items-center justify-center"
+            onClick={handleExportReports}
+          >
             <Icon name="download" className="w-4 h-4 mr-2" />
             Exportar Relatórios
           </Button>
-          <Button variant="secondary" className="flex items-center justify-center">
+          <Button 
+            variant="secondary" 
+            className="flex items-center justify-center"
+            onClick={handleShowSettings}
+          >
             <Icon name="settings" className="w-4 h-4 mr-2" />
             Configurações
           </Button>
-          <Button variant="secondary" className="flex items-center justify-center">
+          <Button 
+            variant="secondary" 
+            className="flex items-center justify-center"
+            onClick={handleShowNotifications}
+          >
             <Icon name="bell" className="w-4 h-4 mr-2" />
             Notificações
           </Button>

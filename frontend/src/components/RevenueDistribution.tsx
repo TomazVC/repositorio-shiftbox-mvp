@@ -90,6 +90,28 @@ const RevenueDistribution = ({ distributions, onDistribute, className = '' }: Re
     setShowDetailsModal(true)
   }
 
+  const handleNewDistribution = () => {
+    // Simular criação de nova distribuição
+    const newDistribution: Distribution = {
+      id: Math.max(...distributions.map(d => d.id)) + 1,
+      loan_id: Math.floor(Math.random() * 10) + 1,
+      payment_id: Math.floor(Math.random() * 1000) + 100,
+      total_amount: Math.floor(Math.random() * 10000) + 1000,
+      platform_fee: 0,
+      security_reserve: 0,
+      investor_amount: 0,
+      distribution_date: new Date().toISOString().split('T')[0],
+      status: 'pending'
+    }
+    
+    // Calcular taxas
+    newDistribution.platform_fee = newDistribution.total_amount * 0.05
+    newDistribution.security_reserve = newDistribution.total_amount * 0.02
+    newDistribution.investor_amount = newDistribution.total_amount * 0.93
+    
+    alert(`Nova distribuição criada!\n\nID: #${newDistribution.id}\nValor Total: R$ ${newDistribution.total_amount.toLocaleString()}\nPara Investidores: R$ ${newDistribution.investor_amount.toLocaleString()}\nStatus: Pendente\n\n(Em um sistema real, seria salva no banco de dados)`)
+  }
+
   return (
     <>
       <div className={`bg-white rounded-lg border border-gray-200 shadow-sm ${className}`}>
@@ -145,7 +167,7 @@ const RevenueDistribution = ({ distributions, onDistribute, className = '' }: Re
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h4 className="font-medium text-gray-900">Distribuições</h4>
-              <Button size="sm">
+              <Button size="sm" onClick={handleNewDistribution}>
                 <Icon name="plus" className="w-4 h-4 mr-2" />
                 Nova Distribuição
               </Button>

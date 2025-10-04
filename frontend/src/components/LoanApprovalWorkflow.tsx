@@ -34,7 +34,7 @@ const LoanApprovalWorkflow = ({ applicationId, onApprovalChange, className = '' 
       // Simular carregamento
       setTimeout(() => {
         const app = getLoanApplicationById(applicationId)
-        setApplication(app)
+        setApplication(app || null)
         if (app) {
           setAdjustedAmount(app.requested_amount.toString())
           setAdjustedRate(app.proposed_interest_rate.toString())

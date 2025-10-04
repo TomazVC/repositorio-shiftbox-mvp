@@ -9,9 +9,6 @@ import {
   ScoreHistory, 
   RiskEvent,
   Distribution,
-  InvestorReturn,
-  PixDeposit,
-  BankAccount,
   LoanApplication
 } from '../types/wallet'
 

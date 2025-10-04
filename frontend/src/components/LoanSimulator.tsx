@@ -10,10 +10,11 @@ import { LoanSimulation, SimulatedPayment } from '../types/wallet'
 interface LoanSimulatorProps {
   userId?: number
   onSimulate?: (simulation: LoanSimulation) => void
+  onLoanRequest?: (simulation: LoanSimulation) => void
   className?: string
 }
 
-const LoanSimulator = ({ userId, onSimulate, className = '' }: LoanSimulatorProps) => {
+const LoanSimulator = ({ userId, onSimulate, onLoanRequest, className = '' }: LoanSimulatorProps) => {
   const [amount, setAmount] = useState('')
   const [duration, setDuration] = useState('12')
   const [purpose, setPurpose] = useState('capital_giro')
@@ -159,6 +160,61 @@ const LoanSimulator = ({ userId, onSimulate, className = '' }: LoanSimulatorProp
     }
     
     return probabilities[userCreditScore.risk_level] || 50
+  }
+
+  // Função para solicitar empréstimo
+  const handleLoanRequest = (simulation: LoanSimulation) => {
+    if (onLoanRequest) {
+      onLoanRequest(simulation)
+    } else {
+      // Comportamento padrão - redirecionar ou mostrar modal
+      alert(`Solicitação de empréstimo iniciada!\nValor: ${formatCurrency(simulation.amount)}\nParcelas: ${simulation.duration_months}x de ${formatCurrency(simulation.monthly_payment)}`)
+    }
+  }
+
+  // Função para baixar PDF da simulação
+  const handleDownloadPDF = (simulation: LoanSimulation) => {
+    // Criar conteúdo do PDF
+    const pdfContent = `
+SIMULAÇÃO DE EMPRÉSTIMO
+========================
+
+Valor Solicitado: ${formatCurrency(simulation.amount)}
+Prazo: ${simulation.duration_months} meses
+Taxa de Juros: ${simulation.interest_rate.toFixed(2)}% a.m.
+
+RESUMO FINANCEIRO
+=================
+Parcela Mensal: ${formatCurrency(simulation.monthly_payment)}
+Total de Juros: ${formatCurrency(simulation.total_interest)}
+Valor Total: ${formatCurrency(simulation.total_amount)}
+
+TAXAS E CUSTOS
+==============
+Taxa de Originação: ${formatCurrency(simulation.fees.origination_fee)}
+Taxa de Processamento: ${formatCurrency(simulation.fees.processing_fee)}
+Seguro: ${formatCurrency(simulation.fees.insurance_fee)}
+Total de Taxas: ${formatCurrency(simulation.fees.total_fees)}
+
+CRONOGRAMA DE PAGAMENTOS (Primeiras 3 parcelas)
+===============================================
+${simulation.schedule.slice(0, 3).map(payment => 
+  `${payment.month}ª parcela - ${payment.due_date} - ${formatCurrency(payment.total)}`
+).join('\n')}
+
+Data da Simulação: ${new Date().toLocaleDateString('pt-BR')}
+    `
+
+    // Criar e baixar arquivo
+    const blob = new Blob([pdfContent], { type: 'text/plain' })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `simulacao-emprestimo-${simulation.amount}-${new Date().getTime()}.txt`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
   }
 
   return (
@@ -360,20 +416,14 @@ const LoanSimulator = ({ userId, onSimulate, className = '' }: LoanSimulatorProp
             <div className="flex gap-3">
               <Button 
                 className="flex-1"
-                onClick={() => {
-                  // Aqui iria para o fluxo de solicitação
-                  console.log('Solicitar empréstimo com:', simulation)
-                }}
+                onClick={() => handleLoanRequest(simulation)}
               >
                 <Icon name="check" className="w-4 h-4 mr-2" />
                 Solicitar Empréstimo
               </Button>
               <Button 
                 variant="secondary" 
-                onClick={() => {
-                  // Aqui iria para download do PDF
-                  console.log('Download simulação:', simulation)
-                }}
+                onClick={() => handleDownloadPDF(simulation)}
               >
                 <Icon name="download" className="w-4 h-4 mr-2" />
                 Baixar PDF
