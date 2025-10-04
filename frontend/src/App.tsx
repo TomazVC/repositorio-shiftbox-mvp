@@ -2,9 +2,11 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
+import { WalletPage } from './pages/WalletPage'
 import Users from './pages/Users'
 import Investments from './pages/Investments'
-import Loans from './pages/Loans'
+import LoansPage from './pages/LoansPage'
+import AdminPage from './pages/AdminPage'
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
 
@@ -23,6 +25,17 @@ function App() {
               <ProtectedRoute>
                 <Layout>
                   <Dashboard />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          
+          <Route
+            path="/wallet"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <WalletPage />
                 </Layout>
               </ProtectedRoute>
             }
@@ -55,7 +68,18 @@ function App() {
             element={
               <ProtectedRoute>
                 <Layout>
-                  <Loans />
+                  <LoansPage />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <AdminPage />
                 </Layout>
               </ProtectedRoute>
             }

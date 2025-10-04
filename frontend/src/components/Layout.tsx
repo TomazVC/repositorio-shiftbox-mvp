@@ -14,9 +14,11 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { path: '/dashboard', label: 'Dashboard', icon: 'bar-chart' },
+  { path: '/wallet', label: 'Carteira', icon: 'wallet' },
   { path: '/users', label: 'Usuários', icon: 'users' },
   { path: '/investments', label: 'Investimentos', icon: 'trending-up' },
   { path: '/loans', label: 'Empréstimos', icon: 'credit-card' },
+  { path: '/admin', label: 'Administração', icon: 'shield' },
 ]
 
 export default function Layout({ children }: LayoutProps) {
