@@ -6,7 +6,7 @@ import LoanSimulator from '../components/LoanSimulator'
 import LoanApprovalWorkflow from '../components/LoanApprovalWorkflow'
 import RepaymentSchedule from '../components/RepaymentSchedule'
 import { formatCurrency } from '../utils/format'
-import { getLoanApplicationsByUserId } from '../data/mockData'
+import { getLoanApplicationsByUserId, mockLoanApplications } from '../data/mockData'
 import { LoanApplication, LoanSimulation, PaymentSchedule } from '../types/wallet'
 
 interface LoansPageProps {
@@ -85,9 +85,52 @@ const LoansPage = ({ currentUserId = 1, isAdmin = false }: LoansPageProps) => {
     setLastSimulation(simulation)
   }
 
-  const handleApprovalChange = (approved: boolean, details: any) => {
-    console.log('Aprovação alterada:', approved, details)
-    loadUserApplications() // Recarregar aplicações
+  const handleLoanRequest = (simulation: LoanSimulation) => {
+    // Criar nova aplicação baseada na simulação
+    const newApplication: LoanApplication = {
+      id: mockLoanApplications.length + 1,
+      user_id: currentUserId,
+      requested_amount: simulation.amount,
+      duration_months: simulation.duration_months,
+      purpose: 'capital_giro', // Valor padrão, seria obtido do formulário
+      status: 'pending',
+      proposed_interest_rate: simulation.interest_rate,
+      application_date: new Date().toISOString().split('T')[0],
+      applicant_info: {
+        document: '000.000.000-00', // Seria obtido do perfil do usuário
+        monthly_income: 10000, // Seria obtido do perfil do usuário
+        company_name: 'Empresa Exemplo' // Seria obtido do perfil do usuário
+      }
+    }
+
+    // Adicionar à lista de aplicações
+    mockLoanApplications.push(newApplication)
+    
+    // Atualizar lista local
+    setUserApplications(prev => [...prev, newApplication])
+    
+    // Mudar para a aba de aplicações
+    setActiveTab('applications')
+    
+    // Mostrar sucesso
+    alert(`Solicitação criada com sucesso!\nNúmero: #${newApplication.id}\nValor: ${formatCurrency(simulation.amount)}\nStatus: Pendente`)
+  }
+
+  const handleApprovalChange = (approved: boolean) => {
+    // Recarregar aplicações quando houver mudança de status
+    loadUserApplications()
+    
+    if (approved) {
+      alert('Empréstimo aprovado com sucesso!')
+    } else {
+      alert('Empréstimo foi rejeitado.')
+    }
+  }
+
+  const handlePaymentUpdate = (scheduleId: number, status: string) => {
+    // Atualizar status do pagamento
+    console.log(`Pagamento ${scheduleId} atualizado para ${status}`)
+    alert(`Pagamento atualizado para: ${status}`)
   }
 
   const getApplicationSummary = () => {
@@ -202,6 +245,7 @@ const LoansPage = ({ currentUserId = 1, isAdmin = false }: LoansPageProps) => {
             <LoanSimulator
               userId={currentUserId}
               onSimulate={handleSimulation}
+              onLoanRequest={handleLoanRequest}
             />
             
             {/* Últimas Simulações */}
@@ -228,7 +272,10 @@ const LoansPage = ({ currentUserId = 1, isAdmin = false }: LoansPageProps) => {
                     <p className="font-bold">{lastSimulation.interest_rate.toFixed(2)}% a.m.</p>
                   </div>
                 </div>
-                <Button className="w-full">
+                <Button 
+                  className="w-full"
+                  onClick={() => handleLoanRequest(lastSimulation)}
+                >
                   <Icon name="check" className="w-4 h-4 mr-2" />
                   Solicitar Este Empréstimo
                 </Button>
@@ -355,9 +402,7 @@ const LoansPage = ({ currentUserId = 1, isAdmin = false }: LoansPageProps) => {
           <RepaymentSchedule
             loanId={1}
             schedule={mockPaymentSchedules}
-            onPaymentUpdate={(scheduleId, status) => {
-              console.log('Pagamento atualizado:', scheduleId, status)
-            }}
+            onPaymentUpdate={handlePaymentUpdate}
           />
         )}
 
