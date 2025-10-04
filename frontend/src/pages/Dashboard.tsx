@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useApi } from '../hooks/useApi'
-import Card from '../components/Card'
+import MetricCard from '../components/MetricCard'
 
 interface PoolData {
   saldo_total: number
@@ -14,16 +13,9 @@ interface PoolData {
 export default function Dashboard() {
   const [poolData, setPoolData] = useState<PoolData | null>(null)
   const [loading, setLoading] = useState(true)
-  const navigate = useNavigate()
   const { get } = useApi()
 
   useEffect(() => {
-    const token = localStorage.getItem('token')
-    if (!token) {
-      navigate('/login')
-      return
-    }
-
     loadPoolData()
   }, [])
 
@@ -38,12 +30,6 @@ export default function Dashboard() {
     }
   }
 
-  const handleLogout = () => {
-    localStorage.removeItem('token')
-    localStorage.removeItem('user_email')
-    navigate('/login')
-  }
-
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -51,104 +37,101 @@ export default function Dashboard() {
     }).format(value)
   }
 
-  const mockUsers = [
-    { id: 1, name: 'João Silva', email: 'joao@email.com', saldo: 15000 },
-    { id: 2, name: 'Maria Santos', email: 'maria@email.com', saldo: 28000 },
-    { id: 3, name: 'Pedro Costa', email: 'pedro@email.com', saldo: 42000 },
-  ]
+  if (loading) {
+    return (
+      <div className="text-center py-12">
+        <div className="inline-block">
+          <div className="skeleton h-8 w-64 mb-4"></div>
+          <div className="skeleton h-4 w-96"></div>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="space-y-8">
       {/* Header */}
-      <header className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-gray-800">ShiftBox Admin</h1>
-          <button
-            onClick={handleLogout}
-            className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 transition"
-          >
-            Sair
-          </button>
-        </div>
-      </header>
+      <div>
+        <h2 className="text-display font-bold" style={{ color: 'var(--text-primary)' }}>
+          Visão Geral do Pool
+        </h2>
+        <p className="text-body mt-2" style={{ color: 'var(--text-secondary)' }}>
+          Acompanhe as principais métricas em tempo real
+        </p>
+      </div>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {loading ? (
-          <div className="text-center py-12">
-            <p className="text-gray-600">Carregando dados...</p>
+      {/* Métricas Principais */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <MetricCard
+          label="Saldo Total"
+          value={formatCurrency(poolData?.saldo_total || 0)}
+          icon="💰"
+          trend={{ value: 12.5, direction: 'up' }}
+        />
+        <MetricCard
+          label="Disponível"
+          value={formatCurrency(poolData?.saldo_disponivel || 0)}
+          icon="✓"
+        />
+        <MetricCard
+          label="Emprestado"
+          value={formatCurrency(poolData?.saldo_emprestado || 0)}
+          icon="📤"
+        />
+        <MetricCard
+          label="Utilização"
+          value={`${poolData?.percentual_utilizacao || 0}%`}
+          icon="📊"
+        />
+      </div>
+
+      {/* Informações Adicionais */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="card">
+          <h3 className="text-h2 mb-4" style={{ color: 'var(--text-primary)' }}>
+            Investidores Ativos
+          </h3>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-display font-bold" style={{ color: 'var(--color-primary)' }}>
+                {poolData?.total_investidores || 0}
+              </p>
+              <p className="text-caption mt-1" style={{ color: 'var(--text-secondary)' }}>
+                Total de investidores no pool
+              </p>
+            </div>
+            <div className="text-5xl">👥</div>
           </div>
-        ) : (
-          <>
-            {/* Cards de Estatísticas */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-              <Card
-                title="Saldo Total"
-                value={formatCurrency(poolData?.saldo_total || 0)}
-                subtitle="Pool completo"
-                color="blue"
-              />
-              <Card
-                title="Disponível"
-                value={formatCurrency(poolData?.saldo_disponivel || 0)}
-                subtitle="Para empréstimos"
-                color="green"
-              />
-              <Card
-                title="Emprestado"
-                value={formatCurrency(poolData?.saldo_emprestado || 0)}
-                subtitle="Em circulação"
-                color="yellow"
-              />
-              <Card
-                title="Utilização"
-                value={`${poolData?.percentual_utilizacao || 0}%`}
-                subtitle={`${poolData?.total_investidores || 0} investidores`}
-                color="purple"
-              />
-            </div>
+        </div>
 
-            {/* Lista de Usuários Mock */}
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <h2 className="text-xl font-semibold text-gray-800 mb-4">
-                Usuários Recentes
-              </h2>
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead>
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Nome
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Email
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Saldo
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {mockUsers.map((user) => (
-                      <tr key={user.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {user.name}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {user.email}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {formatCurrency(user.saldo)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+        <div className="card">
+          <h3 className="text-h2 mb-4" style={{ color: 'var(--text-primary)' }}>
+            Status do Sistema
+          </h3>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-body" style={{ color: 'var(--text-secondary)' }}>
+                API Backend
+              </span>
+              <span className="badge badge-success">Operacional</span>
             </div>
-          </>
-        )}
-      </main>
+            <div className="flex items-center justify-between">
+              <span className="text-body" style={{ color: 'var(--text-secondary)' }}>
+                Banco de Dados
+              </span>
+              <span className="badge badge-success">Conectado</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-body" style={{ color: 'var(--text-secondary)' }}>
+                Última atualização
+              </span>
+              <span className="text-caption" style={{ color: 'var(--text-secondary)' }}>
+                {new Date().toLocaleTimeString('pt-BR')}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
