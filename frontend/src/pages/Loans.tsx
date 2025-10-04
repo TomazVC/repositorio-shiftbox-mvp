@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { useApi } from '../hooks/useApi'
 import { useToast } from '../hooks/useToast'
 import MetricCard from '../components/MetricCard'
 import Badge from '../components/Badge'
 import Button from '../components/Button'
+import Modal from '../components/Modal'
+import Input from '../components/Input'
+import Select from '../components/Select'
 import Toast from '../components/Toast'
 import ConfirmDialog from '../components/ConfirmDialog'
 
@@ -21,9 +22,16 @@ export default function Loans() {
   const [loans, setLoans] = useState<Loan[]>([])
   const [loading, setLoading] = useState(true)
   const [actioningLoan, setActioningLoan] = useState<{ id: number; action: 'approve' | 'reject' } | null>(null)
-  const { get } = useApi()
-  const navigate = useNavigate()
-  const { toasts, removeToast, success, error } = useToast()
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [createForm, setCreateForm] = useState({
+    user_name: '',
+    valor: '',
+    taxa_juros: '2.5',
+    finalidade: '',
+    status: 'pendente' as 'pendente' | 'aprovado' | 'pago' | 'rejeitado'
+  })
+  const [createLoading, setCreateLoading] = useState(false)
+  const { toasts, removeToast, success } = useToast()
 
   // Mock data
   const mockLoans: Loan[] = [
@@ -69,6 +77,44 @@ export default function Loans() {
 
     success(`Empréstimo ${action === 'approve' ? 'aprovado' : 'rejeitado'} com sucesso!`)
     setActioningLoan(null)
+  }
+
+  const handleCreateLoan = async () => {
+    if (!createForm.user_name || !createForm.valor || !createForm.finalidade) {
+      return
+    }
+
+    setCreateLoading(true)
+
+    try {
+      // TODO: Integrar com API real
+      // await post('/loans', createForm)
+      
+      // Simulação local
+      const newLoan: Loan = {
+        id: Math.max(...loans.map(loan => loan.id)) + 1,
+        user_name: createForm.user_name,
+        valor: parseFloat(createForm.valor),
+        status: createForm.status,
+        taxa_juros: parseFloat(createForm.taxa_juros),
+        created_at: new Date().toISOString()
+      }
+
+      setLoans(prev => [...prev, newLoan])
+      success('Empréstimo criado com sucesso!')
+      setIsCreateModalOpen(false)
+      setCreateForm({
+        user_name: '',
+        valor: '',
+        taxa_juros: '2.5',
+        finalidade: '',
+        status: 'pendente'
+      })
+    } catch (error) {
+      console.error('Erro ao criar empréstimo:', error)
+    } finally {
+      setCreateLoading(false)
+    }
   }
 
   const formatCurrency = (value: number) => {
@@ -136,6 +182,86 @@ export default function Loans() {
         type={actioningLoan?.action === 'approve' ? 'info' : 'danger'}
       />
 
+      {/* Modal de Criação */}
+      <Modal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        title="Novo Empréstimo"
+        size="md"
+      >
+        <div className="space-y-4">
+          <Input
+            label="Nome do Solicitante"
+            placeholder="Digite o nome do solicitante"
+            value={createForm.user_name}
+            onChange={(e) => setCreateForm(prev => ({ ...prev, user_name: e.target.value }))}
+          />
+
+          <Input
+            label="Valor do Empréstimo"
+            type="number"
+            placeholder="0.00"
+            hint="Valor em reais (R$)"
+            value={createForm.valor}
+            onChange={(e) => setCreateForm(prev => ({ ...prev, valor: e.target.value }))}
+          />
+
+          <Input
+            label="Taxa de Juros"
+            type="number"
+            placeholder="2.5"
+            hint="Percentual mensal (%)"
+            value={createForm.taxa_juros}
+            onChange={(e) => setCreateForm(prev => ({ ...prev, taxa_juros: e.target.value }))}
+          />
+
+          <Select
+            label="Finalidade"
+            value={createForm.finalidade}
+            onChange={(e) => setCreateForm(prev => ({ ...prev, finalidade: e.target.value }))}
+          >
+            <option value="">Selecione a finalidade</option>
+            <option value="pessoal">Uso Pessoal</option>
+            <option value="comercial">Comercial/Negócios</option>
+            <option value="investimento">Investimento</option>
+            <option value="emergencia">Emergência</option>
+            <option value="educacao">Educação</option>
+            <option value="outros">Outros</option>
+          </Select>
+
+          <Select
+            label="Status"
+            value={createForm.status}
+            onChange={(e) => setCreateForm(prev => ({ 
+              ...prev, 
+              status: e.target.value as 'pendente' | 'aprovado' | 'pago' | 'rejeitado' 
+            }))}
+          >
+            <option value="pendente">Pendente</option>
+            <option value="aprovado">Aprovado</option>
+            <option value="pago">Pago</option>
+            <option value="rejeitado">Rejeitado</option>
+          </Select>
+
+          <div className="flex gap-3 justify-end pt-4">
+            <Button
+              variant="secondary"
+              onClick={() => setIsCreateModalOpen(false)}
+              disabled={createLoading}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleCreateLoan}
+              loading={createLoading}
+            >
+              Criar Empréstimo
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
@@ -148,7 +274,7 @@ export default function Loans() {
         </div>
         <Button
           variant="primary"
-          onClick={() => navigate('/loans/create')}
+          onClick={() => setIsCreateModalOpen(true)}
         >
           + Novo Empréstimo
         </Button>
@@ -159,22 +285,18 @@ export default function Loans() {
         <MetricCard
           label="Total Emprestado"
           value={formatCurrency(totalEmprestado)}
-          icon="🏦"
         />
         <MetricCard
           label="Pendentes"
           value={loans.filter(loan => loan.status === 'pendente').length}
-          icon="⏳"
         />
         <MetricCard
           label="Aprovados"
           value={loans.filter(loan => loan.status === 'aprovado').length}
-          icon="✓"
         />
         <MetricCard
           label="Taxa Média"
           value="2.5% a.m."
-          icon="📊"
         />
       </div>
 

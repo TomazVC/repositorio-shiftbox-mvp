@@ -42,10 +42,10 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md' }:
         onClick={onClose}
       />
 
-      {/* Modal */}
-      <div className="flex min-h-full items-center justify-center p-4">
+      {/* Modal Container */}
+      <div className="relative z-10 flex min-h-full items-center justify-center p-4">
         <div
-          className={`modal-content ${sizes[size]} w-full max-h-[90vh] overflow-y-auto relative`}
+          className={`modal-content ${sizes[size]} w-full max-h-[90vh] overflow-y-auto`}
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}

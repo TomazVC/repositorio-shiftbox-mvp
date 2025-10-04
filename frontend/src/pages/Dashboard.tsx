@@ -65,23 +65,19 @@ export default function Dashboard() {
         <MetricCard
           label="Saldo Total"
           value={formatCurrency(poolData?.saldo_total || 0)}
-          icon="💰"
           trend={{ value: 12.5, direction: 'up' }}
         />
         <MetricCard
           label="Disponível"
           value={formatCurrency(poolData?.saldo_disponivel || 0)}
-          icon="✓"
         />
         <MetricCard
           label="Emprestado"
           value={formatCurrency(poolData?.saldo_emprestado || 0)}
-          icon="📤"
         />
         <MetricCard
           label="Utilização"
           value={`${poolData?.percentual_utilizacao || 0}%`}
-          icon="📊"
         />
       </div>
 
@@ -91,16 +87,13 @@ export default function Dashboard() {
           <h3 className="text-h2 mb-4" style={{ color: 'var(--text-primary)' }}>
             Investidores Ativos
           </h3>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-display font-bold" style={{ color: 'var(--color-primary)' }}>
-                {poolData?.total_investidores || 0}
-              </p>
-              <p className="text-caption mt-1" style={{ color: 'var(--text-secondary)' }}>
-                Total de investidores no pool
-              </p>
-            </div>
-            <div className="text-5xl">👥</div>
+          <div>
+            <p className="text-display font-bold" style={{ color: 'var(--color-primary)' }}>
+              {poolData?.total_investidores || 0}
+            </p>
+            <p className="text-caption mt-1" style={{ color: 'var(--text-secondary)' }}>
+              Total de investidores no pool
+            </p>
           </div>
         </div>
 
