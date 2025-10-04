@@ -1,5 +1,6 @@
 import { ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
+import Icon, { IconName } from './Icon'
 
 interface LayoutProps {
   children: ReactNode
@@ -8,14 +9,14 @@ interface LayoutProps {
 interface NavItem {
   path: string
   label: string
-  icon: string
+  icon: IconName
 }
 
 const navItems: NavItem[] = [
-  { path: '/dashboard', label: 'Dashboard', icon: '📊' },
-  { path: '/users', label: 'Usuários', icon: '👥' },
-  { path: '/investments', label: 'Investimentos', icon: '💰' },
-  { path: '/loans', label: 'Empréstimos', icon: '🏦' },
+  { path: '/dashboard', label: 'Dashboard', icon: 'bar-chart' },
+  { path: '/users', label: 'Usuários', icon: 'users' },
+  { path: '/investments', label: 'Investimentos', icon: 'trending-up' },
+  { path: '/loans', label: 'Empréstimos', icon: 'credit-card' },
 ]
 
 export default function Layout({ children }: LayoutProps) {
@@ -85,7 +86,11 @@ export default function Layout({ children }: LayoutProps) {
                     }
                   }}
                 >
-                  <span className="text-xl">{item.icon}</span>
+                  <Icon 
+                    name={item.icon} 
+                    size={20} 
+                    color={isActive(item.path) ? 'var(--color-primary)' : 'var(--text-secondary)'}
+                  />
                   <span className="text-body">{item.label}</span>
                 </Link>
               </li>
@@ -109,7 +114,7 @@ export default function Layout({ children }: LayoutProps) {
               e.currentTarget.style.backgroundColor = 'transparent'
             }}
           >
-            <span>🚪</span>
+            <Icon name="log-out" size={18} color="var(--color-red)" />
             <span>Sair</span>
           </button>
         </div>

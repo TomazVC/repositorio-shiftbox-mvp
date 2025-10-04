@@ -6,25 +6,19 @@ import Button from '../components/Button'
 import Modal from '../components/Modal'
 import Input from '../components/Input'
 import Select from '../components/Select'
-import Toast from '../components/Toast'
+import { ToastContainer } from '../components/Toast'
 import ConfirmDialog from '../components/ConfirmDialog'
-
-interface Loan {
-  id: number
-  user_name: string
-  valor: number
-  status: 'pendente' | 'aprovado' | 'pago' | 'rejeitado'
-  created_at: string
-  taxa_juros: number
-}
+import { Loan, mockLoans, getActiveUsers } from '../data/mockData'
+import Icon from '../components/Icon'
 
 export default function Loans() {
   const [loans, setLoans] = useState<Loan[]>([])
   const [loading, setLoading] = useState(true)
   const [actioningLoan, setActioningLoan] = useState<{ id: number; action: 'approve' | 'reject' } | null>(null)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [detailsLoan, setDetailsLoan] = useState<Loan | null>(null)
   const [createForm, setCreateForm] = useState({
-    user_name: '',
+    user_id: '',
     valor: '',
     taxa_juros: '2.5',
     finalidade: '',
@@ -33,13 +27,8 @@ export default function Loans() {
   const [createLoading, setCreateLoading] = useState(false)
   const { toasts, removeToast, success } = useToast()
 
-  // Mock data
-  const mockLoans: Loan[] = [
-    { id: 1, user_name: 'Carlos Mendes', valor: 5000, status: 'aprovado', created_at: '2025-01-15', taxa_juros: 2.5 },
-    { id: 2, user_name: 'Fernanda Lima', valor: 8000, status: 'pendente', created_at: '2025-01-18', taxa_juros: 2.5 },
-    { id: 3, user_name: 'Roberto Santos', valor: 12000, status: 'pago', created_at: '2025-01-05', taxa_juros: 2.5 },
-    { id: 4, user_name: 'Juliana Costa', valor: 3000, status: 'rejeitado', created_at: '2025-01-17', taxa_juros: 2.5 },
-  ]
+  // Obter apenas usuários ativos (KYC aprovado)
+  const activeUsers = getActiveUsers()
 
   useEffect(() => {
     loadLoans()
@@ -80,23 +69,31 @@ export default function Loans() {
   }
 
   const handleCreateLoan = async () => {
-    if (!createForm.user_name || !createForm.valor || !createForm.finalidade) {
+    if (!createForm.user_id || !createForm.valor || !createForm.finalidade) {
       return
     }
 
     setCreateLoading(true)
 
     try {
+      // Buscar dados do usuário selecionado
+      const selectedUser = activeUsers.find(user => user.id === parseInt(createForm.user_id))
+      if (!selectedUser) {
+        throw new Error('Usuário não encontrado')
+      }
+
       // TODO: Integrar com API real
       // await post('/loans', createForm)
       
       // Simulação local
       const newLoan: Loan = {
         id: Math.max(...loans.map(loan => loan.id)) + 1,
-        user_name: createForm.user_name,
+        user_id: parseInt(createForm.user_id),
+        user_name: selectedUser.name,
         valor: parseFloat(createForm.valor),
         status: createForm.status,
         taxa_juros: parseFloat(createForm.taxa_juros),
+        finalidade: createForm.finalidade,
         created_at: new Date().toISOString()
       }
 
@@ -104,7 +101,7 @@ export default function Loans() {
       success('Empréstimo criado com sucesso!')
       setIsCreateModalOpen(false)
       setCreateForm({
-        user_name: '',
+        user_id: '',
         valor: '',
         taxa_juros: '2.5',
         finalidade: '',
@@ -157,15 +154,6 @@ export default function Loans() {
 
   return (
     <div className="space-y-8">
-      {/* Toasts */}
-      {toasts.map(toast => (
-        <Toast
-          key={toast.id}
-          message={toast.message}
-          type={toast.type}
-          onClose={() => removeToast(toast.id)}
-        />
-      ))}
 
       {/* Confirm Dialog */}
       <ConfirmDialog
@@ -190,12 +178,18 @@ export default function Loans() {
         size="md"
       >
         <div className="space-y-4">
-          <Input
-            label="Nome do Solicitante"
-            placeholder="Digite o nome do solicitante"
-            value={createForm.user_name}
-            onChange={(e) => setCreateForm(prev => ({ ...prev, user_name: e.target.value }))}
-          />
+          <Select
+            label="Usuário"
+            value={createForm.user_id}
+            onChange={(e) => setCreateForm(prev => ({ ...prev, user_id: e.target.value }))}
+          >
+            <option value="">Selecione um usuário</option>
+            {activeUsers.map(user => (
+              <option key={user.id} value={user.id}>
+                {user.name} - {user.email}
+              </option>
+            ))}
+          </Select>
 
           <Input
             label="Valor do Empréstimo"
@@ -276,7 +270,8 @@ export default function Loans() {
           variant="primary"
           onClick={() => setIsCreateModalOpen(true)}
         >
-          + Novo Empréstimo
+          <Icon name="plus" size={16} />
+          Novo Empréstimo
         </Button>
       </div>
 
@@ -299,6 +294,137 @@ export default function Loans() {
           value="2.5% a.m."
         />
       </div>
+
+      {/* Modal de Detalhes do Empréstimo */}
+      {detailsLoan && (
+        <Modal
+          isOpen={!!detailsLoan}
+          onClose={() => setDetailsLoan(null)}
+          title="Detalhes do Empréstimo"
+          size="lg"
+        >
+          <div className="space-y-6">
+            {/* Informações do Usuário */}
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <h3 className="text-h2 font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>
+                Dados do Solicitante
+              </h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-caption" style={{ color: 'var(--text-secondary)' }}>Nome</p>
+                  <p className="text-body font-medium" style={{ color: 'var(--text-primary)' }}>
+                    {detailsLoan.user_name}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-caption" style={{ color: 'var(--text-secondary)' }}>ID do Usuário</p>
+                  <p className="text-body font-medium" style={{ color: 'var(--text-primary)' }}>
+                    #{detailsLoan.user_id}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Informações do Empréstimo */}
+            <div className="grid grid-cols-2 gap-6">
+              <div>
+                <p className="text-caption mb-1" style={{ color: 'var(--text-secondary)' }}>Valor Solicitado</p>
+                <p className="text-h1 font-bold" style={{ color: 'var(--color-primary)' }}>
+                  {formatCurrency(detailsLoan.valor)}
+                </p>
+              </div>
+              <div>
+                <p className="text-caption mb-1" style={{ color: 'var(--text-secondary)' }}>Taxa de Juros</p>
+                <p className="text-h1 font-bold" style={{ color: 'var(--text-primary)' }}>
+                  {detailsLoan.taxa_juros}% a.m.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-6">
+              <div>
+                <p className="text-caption mb-1" style={{ color: 'var(--text-secondary)' }}>Status</p>
+                {getStatusBadge(detailsLoan.status)}
+              </div>
+              <div>
+                <p className="text-caption mb-1" style={{ color: 'var(--text-secondary)' }}>Data da Solicitação</p>
+                <p className="text-body" style={{ color: 'var(--text-primary)' }}>
+                  {new Date(detailsLoan.created_at).toLocaleDateString('pt-BR')}
+                </p>
+              </div>
+            </div>
+
+            {detailsLoan.finalidade && (
+              <div>
+                <p className="text-caption mb-2" style={{ color: 'var(--text-secondary)' }}>Finalidade</p>
+                <div className="p-3 bg-blue-50 rounded-lg border-l-4 border-blue-500">
+                  <p className="text-body" style={{ color: 'var(--text-primary)' }}>
+                    {detailsLoan.finalidade}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Cálculos do Empréstimo */}
+            <div className="bg-yellow-50 p-4 rounded-lg border-l-4 border-yellow-500">
+              <h4 className="text-h3 font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>
+                Simulação de Pagamento (12 meses)
+              </h4>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <p className="text-caption" style={{ color: 'var(--text-secondary)' }}>Valor Total</p>
+                  <p className="text-body font-semibold" style={{ color: 'var(--text-primary)' }}>
+                    {formatCurrency(detailsLoan.valor * (1 + (detailsLoan.taxa_juros / 100) * 12))}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-caption" style={{ color: 'var(--text-secondary)' }}>Juros Total</p>
+                  <p className="text-body font-semibold" style={{ color: 'var(--text-primary)' }}>
+                    {formatCurrency(detailsLoan.valor * (detailsLoan.taxa_juros / 100) * 12)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-caption" style={{ color: 'var(--text-secondary)' }}>Parcela Mensal</p>
+                  <p className="text-body font-semibold" style={{ color: 'var(--text-primary)' }}>
+                    {formatCurrency((detailsLoan.valor * (1 + (detailsLoan.taxa_juros / 100) * 12)) / 12)}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3 justify-end pt-4">
+              <Button
+                variant="secondary"
+                onClick={() => setDetailsLoan(null)}
+              >
+                Fechar
+              </Button>
+              {detailsLoan.status === 'pendente' && (
+                <>
+                  <Button
+                    variant="danger"
+                    onClick={() => {
+                      handleAction(detailsLoan.id, 'reject')
+                      setDetailsLoan(null)
+                    }}
+                  >
+                    Rejeitar
+                  </Button>
+                  <Button
+                    variant="primary"
+                    onClick={() => {
+                      handleAction(detailsLoan.id, 'approve')
+                      setDetailsLoan(null)
+                    }}
+                  >
+                    Aprovar
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* Tabela */}
       <div className="table-container">
@@ -337,6 +463,7 @@ export default function Loans() {
                         size="sm"
                         onClick={() => handleAction(loan.id, 'approve')}
                       >
+                        <Icon name="check" size={14} />
                         Aprovar
                       </Button>
                       <Button
@@ -344,11 +471,17 @@ export default function Loans() {
                         size="sm"
                         onClick={() => handleAction(loan.id, 'reject')}
                       >
+                        <Icon name="x" size={14} />
                         Rejeitar
                       </Button>
                     </div>
                   ) : (
-                    <Button variant="ghost" size="sm">
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => setDetailsLoan(loan)}
+                    >
+                      <Icon name="eye" size={14} />
                       Detalhes
                     </Button>
                   )}
@@ -358,6 +491,9 @@ export default function Loans() {
           </tbody>
         </table>
       </div>
+
+      {/* Toasts */}
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>
   )
 }

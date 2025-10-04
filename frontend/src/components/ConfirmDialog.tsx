@@ -10,6 +10,7 @@ interface ConfirmDialogProps {
   confirmText?: string
   cancelText?: string
   type?: 'danger' | 'warning' | 'info'
+  loading?: boolean
 }
 
 export default function ConfirmDialog({
@@ -21,10 +22,10 @@ export default function ConfirmDialog({
   confirmText = 'Confirmar',
   cancelText = 'Cancelar',
   type = 'danger',
+  loading = false,
 }: ConfirmDialogProps) {
   const handleConfirm = () => {
     onConfirm()
-    onClose()
   }
 
   return (
@@ -37,6 +38,7 @@ export default function ConfirmDialog({
             variant="secondary"
             onClick={onClose}
             size="md"
+            disabled={loading}
           >
             {cancelText}
           </Button>
@@ -44,6 +46,7 @@ export default function ConfirmDialog({
             variant={type === 'danger' ? 'danger' : 'primary'}
             onClick={handleConfirm}
             size="md"
+            loading={loading}
           >
             {confirmText}
           </Button>
