@@ -1,0 +1,102 @@
+/**
+ * ShiftBox Design System - Utilitários
+ */
+
+/* === TIPOGRAFIA === */
+.text-display {
+  font-size: var(--text-display-size);
+  line-height: var(--text-display-height);
+  font-weight: var(--text-display-weight);
+}
+
+.text-h1 {
+  font-size: var(--text-h1-size);
+  line-height: var(--text-h1-height);
+  font-weight: var(--text-h1-weight);
+}
+
+.text-h2 {
+  font-size: var(--text-h2-size);
+  line-height: var(--text-h2-height);
+  font-weight: var(--text-h2-weight);
+}
+
+.text-body {
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-height);
+  font-weight: var(--text-body-weight);
+}
+
+.text-caption {
+  font-size: var(--text-caption-size);
+  line-height: var(--text-caption-height);
+  font-weight: var(--text-caption-weight);
+}
+
+.text-primary {
+  color: var(--text-primary);
+}
+
+.text-secondary {
+  color: var(--text-secondary);
+}
+
+/* === ESPAÇAMENTO === */
+.container {
+  max-width: var(--container-max);
+  margin: 0 auto;
+  padding: 0 var(--grid-gutter);
+}
+
+/* === SKELETON === */
+.skeleton {
+  background-color: var(--bg-elev-2);
+  border-radius: var(--radius-md);
+  animation: shimmer 2s infinite;
+  background: linear-gradient(
+    90deg,
+    var(--bg-elev-2) 25%,
+    var(--border-light) 50%,
+    var(--bg-elev-2) 75%
+  );
+  background-size: 200% 100%;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* === ANIMAÇÕES === */
+.fade-in {
+  animation: fadeIn var(--transition-base);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.slide-up {
+  animation: slideUp var(--transition-base);
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+

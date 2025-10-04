@@ -8,11 +8,9 @@ import {
   Alert,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import axios from 'axios';
-import { RootStackParamList } from '../App';
-
-const API_URL = 'http://localhost:8000';
+import { RootStackParamList } from '../types';
+import { authService } from '../services/authService';
+import { COLORS, FONT_SIZES, SPACING, COMPONENTS } from '../constants';
 
 type LoginScreenNavigationProp = NativeStackNavigationProp<
   RootStackParamList,
@@ -36,20 +34,10 @@ export default function Login({ navigation }: Props) {
 
     setLoading(true);
     try {
-      const response = await axios.post(`${API_URL}/auth/login`, {
-        email,
-        password,
-      });
-
-      await AsyncStorage.setItem('token', response.data.token);
-      await AsyncStorage.setItem('user_email', response.data.email);
-
+      await authService.login({ email, password });
       navigation.replace('Dashboard');
     } catch (error: any) {
-      Alert.alert(
-        'Erro',
-        error.response?.data?.detail || 'Erro ao fazer login'
-      );
+      Alert.alert('Erro', error.message || 'Erro ao fazer login');
     } finally {
       setLoading(false);
     }
@@ -66,6 +54,7 @@ export default function Login({ navigation }: Props) {
           <TextInput
             style={styles.input}
             placeholder="seu@email.com"
+            placeholderTextColor={COLORS.PLACEHOLDER}
             value={email}
             onChangeText={setEmail}
             keyboardType="email-address"
@@ -76,6 +65,7 @@ export default function Login({ navigation }: Props) {
           <TextInput
             style={styles.input}
             placeholder="••••••••"
+            placeholderTextColor={COLORS.PLACEHOLDER}
             value={password}
             onChangeText={setPassword}
             secureTextEntry
@@ -113,86 +103,85 @@ export default function Login({ navigation }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F0F9FF',
+    backgroundColor: COLORS.BG_SCREEN,
   },
   content: {
     flex: 1,
     justifyContent: 'center',
-    padding: 24,
+    padding: SPACING.LG,
   },
   title: {
-    fontSize: 36,
-    fontWeight: 'bold',
+    fontSize: FONT_SIZES.TITLE_MAIN,
+    fontWeight: '600',
     textAlign: 'center',
-    color: '#1E293B',
-    marginBottom: 8,
+    color: COLORS.TEXT_PRIMARY,
+    marginBottom: SPACING.SM,
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: FONT_SIZES.BODY,
     textAlign: 'center',
-    color: '#64748B',
-    marginBottom: 48,
+    color: COLORS.TEXT_SECONDARY,
+    marginBottom: SPACING['2XL'],
   },
   form: {
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    backgroundColor: COLORS.BG_CARD,
+    borderRadius: COMPONENTS.CARD_RADIUS,
+    padding: SPACING.LG,
+    ...COMPONENTS.CARD_SHADOW,
   },
   label: {
-    fontSize: 14,
+    fontSize: FONT_SIZES.SM,
     fontWeight: '600',
-    color: '#374151',
-    marginBottom: 8,
+    color: COLORS.TEXT_PRIMARY,
+    marginBottom: SPACING.SM,
   },
   input: {
+    height: COMPONENTS.INPUT_HEIGHT,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    marginBottom: 16,
+    borderColor: COLORS.DIVIDER,
+    borderRadius: COMPONENTS.INPUT_RADIUS,
+    paddingHorizontal: SPACING.BASE,
+    fontSize: FONT_SIZES.BODY,
+    marginBottom: SPACING.BASE,
+    color: COLORS.TEXT_PRIMARY,
   },
   button: {
-    backgroundColor: '#0EA5E9',
-    borderRadius: 8,
-    padding: 16,
+    backgroundColor: COLORS.PRIMARY,
+    borderRadius: COMPONENTS.BUTTON_RADIUS,
+    height: COMPONENTS.BUTTON_HEIGHT,
     alignItems: 'center',
-    marginTop: 8,
+    justifyContent: 'center',
+    marginTop: SPACING.SM,
   },
   buttonDisabled: {
     opacity: 0.6,
   },
   buttonText: {
-    color: 'white',
-    fontSize: 16,
+    color: COLORS.PRIMARY_CONTRAST,
+    fontSize: FONT_SIZES.BODY,
     fontWeight: '600',
   },
   linkContainer: {
-    marginTop: 16,
+    marginTop: SPACING.BASE,
     alignItems: 'center',
   },
   linkText: {
-    color: '#0EA5E9',
-    fontSize: 14,
+    color: COLORS.PRIMARY,
+    fontSize: FONT_SIZES.SM,
+    fontWeight: '500',
   },
   testCredentials: {
-    marginTop: 24,
+    marginTop: SPACING.LG,
     alignItems: 'center',
   },
   testText: {
-    fontSize: 12,
-    color: '#64748B',
+    fontSize: FONT_SIZES.AUXILIARY,
+    color: COLORS.TEXT_SECONDARY,
   },
   testEmail: {
-    fontSize: 11,
-    color: '#64748B',
+    fontSize: FONT_SIZES.XS,
+    color: COLORS.TEXT_SECONDARY,
     fontFamily: 'monospace',
-    marginTop: 4,
+    marginTop: SPACING.XS,
   },
 });
-
