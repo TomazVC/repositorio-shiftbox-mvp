@@ -100,3 +100,42 @@
   }
 }
 
+/* === CHARTS ESPECÍFICOS === */
+.recharts-wrapper {
+  direction: ltr;
+}
+
+.recharts-surface {
+  overflow: visible;
+}
+
+/* Customização dos tooltips dos gráficos */
+.recharts-tooltip-wrapper {
+  z-index: 10;
+}
+
+.recharts-default-tooltip {
+  background-color: var(--bg-page) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: var(--shadow-elevated) !important;
+}
+
+/* === GRID PARA CHARTS === */
+.charts-grid {
+  display: grid;
+  gap: var(--space-6);
+}
+
+@media (min-width: 768px) {
+  .charts-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 767px) {
+  .charts-grid {
+    grid-template-columns: 1fr;
+  }
+}
+

@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useApi } from '../hooks/useApi'
 import MetricCard from '../components/MetricCard'
+import PoolPieChart from '../components/charts/PoolPieChart'
+import InvestmentLineChart from '../components/charts/InvestmentLineChart'
+import LoanStatusBarChart from '../components/charts/LoanStatusBarChart'
+import { poolCompositionData, investmentEvolutionData, loanStatusData } from '../data/chartData'
+import { poolTestScenarios, getPoolDataByScenario } from '../data/testPoolData'
+import Button from '../components/Button'
 
 interface PoolData {
   saldo_total: number
@@ -13,6 +19,7 @@ interface PoolData {
 export default function Dashboard() {
   const [poolData, setPoolData] = useState<PoolData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [currentScenario, setCurrentScenario] = useState('Valores Normais')
   const { get } = useApi()
 
   useEffect(() => {
@@ -25,15 +32,33 @@ export default function Dashboard() {
       setPoolData(response.data)
     } catch (error) {
       console.error('Erro ao carregar dados:', error)
+      // Em caso de erro, usar dados de teste
+      setPoolData(getPoolDataByScenario(currentScenario))
     } finally {
       setLoading(false)
     }
   }
 
+  const switchToScenario = (scenarioName: string) => {
+    setCurrentScenario(scenarioName)
+    setPoolData(getPoolDataByScenario(scenarioName))
+  }
+
   const formatCurrency = (value: number) => {
+    // Para valores muito grandes, usar formatação compacta
+    if (value >= 1e9) {
+      return `R$ ${(value / 1e9).toFixed(1)}B`
+    } else if (value >= 1e6) {
+      return `R$ ${(value / 1e6).toFixed(1)}M`
+    } else if (value >= 1e3) {
+      return `R$ ${(value / 1e3).toFixed(0)}K`
+    }
+    
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
-      currency: 'BRL'
+      currency: 'BRL',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
     }).format(value)
   }
 
@@ -58,10 +83,32 @@ export default function Dashboard() {
         <p className="text-body mt-2" style={{ color: 'var(--text-secondary)' }}>
           Acompanhe as principais métricas em tempo real
         </p>
+        
+        {/* Seletor de Cenários de Teste */}
+        <div className="mt-4 p-4 bg-blue-50 rounded-lg border-l-4 border-blue-500">
+          <p className="text-sm font-medium text-blue-800 mb-2">
+            Teste de Formatação de Valores
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {poolTestScenarios.map((scenario) => (
+              <Button
+                key={scenario.scenario}
+                size="sm"
+                variant={currentScenario === scenario.scenario ? 'primary' : 'secondary'}
+                onClick={() => switchToScenario(scenario.scenario)}
+              >
+                {scenario.scenario}
+              </Button>
+            ))}
+          </div>
+          <p className="text-xs text-blue-600 mt-2">
+            Atual: {currentScenario} • Total: {formatCurrency(poolData?.saldo_total || 0)}
+          </p>
+        </div>
       </div>
 
       {/* Métricas Principais */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
         <MetricCard
           label="Saldo Total"
           value={formatCurrency(poolData?.saldo_total || 0)}
@@ -79,6 +126,17 @@ export default function Dashboard() {
           label="Utilização"
           value={`${poolData?.percentual_utilizacao || 0}%`}
         />
+      </div>
+
+      {/* Seção de Gráficos */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <PoolPieChart data={poolCompositionData} loading={loading} />
+        <InvestmentLineChart data={investmentEvolutionData} loading={loading} />
+      </div>
+
+      {/* Gráfico de Barras - Status dos Empréstimos */}
+      <div className="grid grid-cols-1 gap-6">
+        <LoanStatusBarChart data={loanStatusData} loading={loading} />
       </div>
 
       {/* Informações Adicionais */}

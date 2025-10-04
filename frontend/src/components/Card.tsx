@@ -1,3 +1,5 @@
+import { TrendIcon } from './Icon'
+
 interface CardProps {
   title: string
   value: string | number
@@ -28,7 +30,7 @@ export default function Card({ title, value, subtitle, icon, trend }: CardProps)
                 color: trend.direction === 'up' ? 'var(--color-green)' : 'var(--color-red)' 
               }}
             >
-              <span>{trend.direction === 'up' ? '↑' : '↓'}</span>
+              <TrendIcon direction={trend.direction} size={16} />
               <span>{Math.abs(trend.value)}%</span>
             </div>
           )}
