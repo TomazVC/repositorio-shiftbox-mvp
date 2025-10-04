@@ -1,7 +1,13 @@
+﻿"""Pool dashboard API."""
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
+from sqlalchemy import func
+from sqlalchemy.orm import Session
 
-router = APIRouter()
+from app.db import get_db
+from app.models import Investment, Loan, Wallet
+
+router = APIRouter(prefix="/pool", tags=["pool"])
 
 
 class PoolResponse(BaseModel):
@@ -13,21 +19,28 @@ class PoolResponse(BaseModel):
 
 
 @router.get("", response_model=PoolResponse)
-async def get_pool_status():
-    """
-    Retorna o status atual do pool de investimentos.
-    Para MVP, retorna dados mockados.
-    """
-    saldo_total = 1000000.0
-    saldo_emprestado = 350000.0
-    saldo_disponivel = saldo_total - saldo_emprestado
-    percentual_utilizacao = (saldo_emprestado / saldo_total) * 100
-    
-    return PoolResponse(
-        saldo_total=saldo_total,
-        saldo_disponivel=saldo_disponivel,
-        saldo_emprestado=saldo_emprestado,
-        percentual_utilizacao=round(percentual_utilizacao, 2),
-        total_investidores=45
+async def get_pool_status(db: Session = Depends(get_db)) -> PoolResponse:
+    saldo_total = db.query(func.coalesce(func.sum(Wallet.saldo), 0.0)).scalar()
+    saldo_emprestado = (
+        db.query(func.coalesce(func.sum(Loan.valor), 0.0))
+        .filter(Loan.status.in_(["pendente", "ativo"]))
+        .scalar()
     )
+    saldo_disponivel = max((saldo_total or 0.0) - (saldo_emprestado or 0.0), 0.0)
+    percentual_utilizacao = 0.0
+    if saldo_total:
+        percentual_utilizacao = round((saldo_emprestado or 0.0) / saldo_total * 100, 2)
 
+    total_investidores = (
+        db.query(func.count(func.distinct(Investment.user_id)))
+        .filter(Investment.status == "ativo")
+        .scalar()
+    ) or 0
+
+    return PoolResponse(
+        saldo_total=float(saldo_total or 0.0),
+        saldo_disponivel=float(saldo_disponivel),
+        saldo_emprestado=float(saldo_emprestado or 0.0),
+        percentual_utilizacao=percentual_utilizacao,
+        total_investidores=int(total_investidores),
+    )
