@@ -6,10 +6,14 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
+  RefreshControl,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { RootStackParamList } from '../App';
+import { RootStackParamList } from '../types';
+import { authService } from '../services/authService';
+import { walletService } from '../services/walletService';
+import { poolService } from '../services/poolService';
+import { COLORS, FONT_SIZES, SPACING, COMPONENTS, CURRENCY } from '../constants';
 
 type DashboardScreenNavigationProp = NativeStackNavigationProp<
   RootStackParamList,
@@ -22,25 +26,51 @@ type Props = {
 
 export default function Dashboard({ navigation }: Props) {
   const [userEmail, setUserEmail] = useState('');
-  const [saldo, setSaldo] = useState(12500.0);
+  const [walletBalance, setWalletBalance] = useState(0);
+  const [poolStatus, setPoolStatus] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     loadUserData();
+    loadDashboardData();
   }, []);
 
   const loadUserData = async () => {
-    const email = await AsyncStorage.getItem('user_email');
-    setUserEmail(email || 'Usuário');
+    const user = await authService.getCurrentUser();
+    setUserEmail(user?.email || 'Usuário');
+  };
+
+  const loadDashboardData = async () => {
+    setLoading(true);
+    try {
+      // Carregar saldo da carteira
+      const wallet = await walletService.getWallet();
+      setWalletBalance(wallet.saldo);
+
+      // Carregar status do pool
+      const pool = await poolService.getPoolStatus();
+      setPoolStatus(pool);
+    } catch (error) {
+      console.warn('Erro ao carregar dados do dashboard:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadDashboardData();
+    setRefreshing(false);
   };
 
   const handleLogout = async () => {
-    await AsyncStorage.removeItem('token');
-    await AsyncStorage.removeItem('user_email');
+    await authService.logout();
     navigation.replace('Login');
   };
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', {
+    return new Intl.NumberFormat(CURRENCY.LOCALE, {
       style: 'currency',
       currency: 'BRL',
     }).format(value);
@@ -51,7 +81,12 @@ export default function Dashboard({ navigation }: Props) {
   };
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView 
+      style={styles.container}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
+    >
       <View style={styles.header}>
         <View>
           <Text style={styles.greeting}>Olá,</Text>
@@ -62,13 +97,16 @@ export default function Dashboard({ navigation }: Props) {
         </TouchableOpacity>
       </View>
 
+      {/* Saldo da carteira */}
       <View style={styles.balanceCard}>
         <Text style={styles.balanceLabel}>Saldo Disponível</Text>
-        <Text style={styles.balanceValue}>{formatCurrency(saldo)}</Text>
+        <Text style={styles.balanceValue}>
+          {loading ? 'Carregando...' : formatCurrency(walletBalance)}
+        </Text>
         <View style={styles.balanceActions}>
           <TouchableOpacity
             style={[styles.actionButton, styles.actionButtonPrimary]}
-            onPress={showComingSoon}
+            onPress={() => navigation.navigate('Invest')}
           >
             <Text style={styles.actionButtonTextPrimary}>Investir</Text>
           </TouchableOpacity>
@@ -81,34 +119,75 @@ export default function Dashboard({ navigation }: Props) {
         </View>
       </View>
 
+      {/* Status do pool */}
+      {poolStatus && (
+        <View style={styles.poolCard}>
+          <Text style={styles.poolTitle}>Status do Pool</Text>
+          <View style={styles.poolInfo}>
+            <View style={styles.poolItem}>
+              <Text style={styles.poolLabel}>Total no Pool</Text>
+              <Text style={styles.poolValue}>{formatCurrency(poolStatus.saldo_total)}</Text>
+            </View>
+            <View style={styles.poolItem}>
+              <Text style={styles.poolLabel}>Utilização</Text>
+              <Text style={styles.poolValue}>{poolStatus.percentual_utilizacao}%</Text>
+            </View>
+            <View style={styles.poolItem}>
+              <Text style={styles.poolLabel}>Investidores</Text>
+              <Text style={styles.poolValue}>{poolStatus.total_investidores}</Text>
+            </View>
+          </View>
+        </View>
+      )}
+
+      {/* Ações rápidas */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Ações Rápidas</Text>
         <View style={styles.quickActions}>
-          <TouchableOpacity style={styles.quickActionCard} onPress={showComingSoon}>
-            <Text style={styles.quickActionIcon}>💰</Text>
+          <TouchableOpacity 
+            style={styles.quickActionCard} 
+            onPress={() => navigation.navigate('LoanRequest')}
+          >
+            <Text style={styles.quickActionIcon}>🏦</Text>
             <Text style={styles.quickActionText}>Pedir Empréstimo</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.quickActionCard} onPress={showComingSoon}>
-            <Text style={styles.quickActionIcon}>📊</Text>
+          <TouchableOpacity 
+            style={styles.quickActionCard} 
+            onPress={showComingSoon}
+          >
+            <Text style={styles.quickActionIcon}>💰</Text>
             <Text style={styles.quickActionText}>Meus Investimentos</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.quickActionCard} onPress={showComingSoon}>
+          <TouchableOpacity 
+            style={styles.quickActionCard} 
+            onPress={showComingSoon}
+          >
             <Text style={styles.quickActionIcon}>📈</Text>
             <Text style={styles.quickActionText}>Rendimentos</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.quickActionCard} onPress={showComingSoon}>
-            <Text style={styles.quickActionIcon}>🏦</Text>
+          <TouchableOpacity 
+            style={styles.quickActionCard} 
+            onPress={() => navigation.navigate('Transactions')}
+          >
+            <Text style={styles.quickActionIcon}>📋</Text>
             <Text style={styles.quickActionText}>Extrato</Text>
           </TouchableOpacity>
         </View>
       </View>
 
+      {/* Transações recentes */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Transações Recentes</Text>
         <View style={styles.transactionCard}>
           <Text style={styles.emptyText}>
             Nenhuma transação ainda
           </Text>
+          <TouchableOpacity 
+            style={styles.viewAllButton}
+            onPress={() => navigation.navigate('Transactions')}
+          >
+            <Text style={styles.viewAllText}>Ver todas</Text>
+          </TouchableOpacity>
         </View>
       </View>
     </ScrollView>
@@ -118,124 +197,164 @@ export default function Dashboard({ navigation }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: COLORS.BG_SCREEN,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 24,
+    padding: SPACING.LG,
     paddingTop: 60,
-    backgroundColor: 'white',
+    backgroundColor: COLORS.BG_CARD,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.DIVIDER,
   },
   greeting: {
-    fontSize: 14,
-    color: '#64748B',
+    fontSize: FONT_SIZES.SM,
+    color: COLORS.TEXT_SECONDARY,
   },
   userName: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1E293B',
+    fontSize: FONT_SIZES.LG,
+    fontWeight: '600',
+    color: COLORS.TEXT_PRIMARY,
   },
   logoutButton: {
-    padding: 8,
+    padding: SPACING.SM,
   },
   logoutText: {
-    color: '#EF4444',
-    fontSize: 14,
-    fontWeight: '600',
+    color: COLORS.ERROR,
+    fontSize: FONT_SIZES.SM,
+    fontWeight: '500',
   },
   balanceCard: {
-    backgroundColor: '#0EA5E9',
-    margin: 24,
-    padding: 24,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    backgroundColor: COLORS.PRIMARY,
+    margin: SPACING.LG,
+    padding: SPACING.LG,
+    borderRadius: COMPONENTS.CARD_RADIUS,
+    ...COMPONENTS.CARD_SHADOW,
   },
   balanceLabel: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 14,
-    marginBottom: 8,
+    color: COLORS.PRIMARY_CONTRAST,
+    fontSize: FONT_SIZES.SM,
+    marginBottom: SPACING.SM,
+    opacity: 0.9,
   },
   balanceValue: {
-    color: 'white',
-    fontSize: 36,
-    fontWeight: 'bold',
-    marginBottom: 24,
+    color: COLORS.PRIMARY_CONTRAST,
+    fontSize: FONT_SIZES['4XL'],
+    fontWeight: '600',
+    marginBottom: SPACING.LG,
   },
   balanceActions: {
     flexDirection: 'row',
-    gap: 12,
+    gap: SPACING.BASE,
   },
   actionButton: {
     flex: 1,
-    padding: 12,
-    borderRadius: 8,
+    paddingVertical: SPACING.BASE,
+    borderRadius: COMPONENTS.INPUT_RADIUS,
     alignItems: 'center',
   },
   actionButtonPrimary: {
-    backgroundColor: 'white',
+    backgroundColor: COLORS.PRIMARY_CONTRAST,
   },
   actionButtonSecondary: {
     backgroundColor: 'rgba(255,255,255,0.2)',
   },
   actionButtonTextPrimary: {
-    color: '#0EA5E9',
+    color: COLORS.PRIMARY,
     fontWeight: '600',
+    fontSize: FONT_SIZES.BODY,
   },
   actionButtonTextSecondary: {
-    color: 'white',
+    color: COLORS.PRIMARY_CONTRAST,
     fontWeight: '600',
+    fontSize: FONT_SIZES.BODY,
+  },
+  poolCard: {
+    backgroundColor: COLORS.BG_CARD,
+    marginHorizontal: SPACING.LG,
+    marginBottom: SPACING.BASE,
+    padding: SPACING.LG,
+    borderRadius: COMPONENTS.CARD_RADIUS,
+    ...COMPONENTS.CARD_SHADOW,
+  },
+  poolTitle: {
+    fontSize: FONT_SIZES.BODY,
+    fontWeight: '600',
+    color: COLORS.TEXT_PRIMARY,
+    marginBottom: SPACING.BASE,
+  },
+  poolInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  poolItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  poolLabel: {
+    fontSize: FONT_SIZES.SM,
+    color: COLORS.TEXT_SECONDARY,
+    marginBottom: SPACING.XS,
+  },
+  poolValue: {
+    fontSize: FONT_SIZES.LG,
+    fontWeight: '600',
+    color: COLORS.TEXT_PRIMARY,
   },
   section: {
-    paddingHorizontal: 24,
-    marginBottom: 24,
+    paddingHorizontal: SPACING.LG,
+    marginBottom: SPACING.LG,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1E293B',
-    marginBottom: 16,
+    fontSize: FONT_SIZES.LG,
+    fontWeight: '600',
+    color: COLORS.TEXT_PRIMARY,
+    marginBottom: SPACING.BASE,
   },
   quickActions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: SPACING.BASE-1,
   },
   quickActionCard: {
-    backgroundColor: 'white',
+    backgroundColor: COLORS.BG_CARD,
     width: '48%',
-    padding: 20,
-    borderRadius: 12,
+    padding: SPACING.LG,
+    borderRadius: COMPONENTS.CARD_RADIUS,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    ...COMPONENTS.CARD_SHADOW,
   },
   quickActionIcon: {
     fontSize: 32,
-    marginBottom: 8,
+    marginBottom: SPACING.SM,
   },
   quickActionText: {
-    fontSize: 12,
-    color: '#475569',
+    fontSize: FONT_SIZES.SM,
+    color: COLORS.TEXT_PRIMARY,
     textAlign: 'center',
+    fontWeight: '500',
   },
   transactionCard: {
-    backgroundColor: 'white',
-    padding: 24,
-    borderRadius: 12,
+    backgroundColor: COLORS.BG_CARD,
+    padding: SPACING.LG,
+    borderRadius: COMPONENTS.CARD_RADIUS,
     alignItems: 'center',
+    ...COMPONENTS.CARD_SHADOW,
   },
   emptyText: {
-    color: '#94A3B8',
-    fontSize: 14,
+    color: COLORS.TEXT_SECONDARY,
+    fontSize: FONT_SIZES.BODY,
+    marginBottom: SPACING.BASE,
+  },
+  viewAllButton: {
+    paddingVertical: SPACING.SM,
+    paddingHorizontal: SPACING.BASE,
+  },
+  viewAllText: {
+    color: COLORS.PRIMARY,
+    fontSize: FONT_SIZES.SM,
+    fontWeight: '500',
   },
 });
-
