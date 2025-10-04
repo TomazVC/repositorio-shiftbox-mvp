@@ -1,0 +1,100 @@
+/**
+ * ShiftBox Design System - Tokens
+ * Paleta minimalista verde + branco com identidade futurista
+ */
+
+:root {
+  /* === CORES PRIMÁRIAS === */
+  --color-primary: #04BF55;
+  --color-primary-hover: #03A84B;
+  --color-primary-contrast: #FFFFFF;
+  --color-primary-light: rgba(4, 191, 85, 0.08);
+  
+  /* === NEUTROS (Base Branca) === */
+  --bg-page: #FFFFFF;
+  --bg-elev-1: #FEFEFE;
+  --bg-elev-2: #F1F1F1;
+  --bg-zebra: #FBFBFB;
+  --bg-header: #F8FAFC;
+  --border: #E4E4E4;
+  --border-light: #F1F1F1;
+  
+  /* === TEXTO === */
+  --text-primary: #0F172A;
+  --text-secondary: #475569;
+  --text-placeholder: #94A3B8;
+  --text-disabled: #CBD5E1;
+  
+  /* === FEEDBACK === */
+  --color-red: #EF4444;
+  --color-red-bg: #FEF2F2;
+  --color-yellow: #F59E0B;
+  --color-yellow-bg: #FFFBEB;
+  --color-blue: #3B82F6;
+  --color-blue-bg: #EFF6FF;
+  --color-green: #10B981;
+  --color-green-bg: #F0FDF4;
+  
+  /* === ESTADOS === */
+  --focus: #04BF55;
+  --disabled: #D1D5DB;
+  --shadow-base: 0 4px 24px rgba(0, 0, 0, 0.06);
+  --shadow-elevated: 0 10px 40px rgba(0, 0, 0, 0.14);
+  --shadow-hover: 0 6px 28px rgba(0, 0, 0, 0.08);
+  
+  /* === TIPOGRAFIA === */
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro', 'Segoe UI', sans-serif;
+  
+  /* Display */
+  --text-display-size: 2rem;         /* 32px */
+  --text-display-height: 2.5rem;     /* 40px */
+  --text-display-weight: 600;
+  
+  /* H1 */
+  --text-h1-size: 1.5rem;            /* 24px */
+  --text-h1-height: 2rem;            /* 32px */
+  --text-h1-weight: 600;
+  
+  /* H2 */
+  --text-h2-size: 1.25rem;           /* 20px */
+  --text-h2-height: 1.75rem;         /* 28px */
+  --text-h2-weight: 600;
+  
+  /* Body */
+  --text-body-size: 1rem;            /* 16px */
+  --text-body-height: 1.5rem;        /* 24px */
+  --text-body-weight: 400;
+  
+  /* Caption */
+  --text-caption-size: 0.75rem;      /* 12px */
+  --text-caption-height: 1rem;       /* 16px */
+  --text-caption-weight: 500;
+  
+  /* === ESPAÇAMENTO (múltiplos de 8) === */
+  --space-1: 0.25rem;    /* 4px */
+  --space-2: 0.5rem;     /* 8px */
+  --space-3: 0.75rem;    /* 12px */
+  --space-4: 1rem;       /* 16px */
+  --space-5: 1.5rem;     /* 24px */
+  --space-6: 2rem;       /* 32px */
+  --space-8: 4rem;       /* 64px */
+  
+  /* === BORDAS === */
+  --radius-sm: 0.5rem;      /* 8px */
+  --radius-md: 0.75rem;     /* 12px */
+  --radius-lg: 1rem;        /* 16px */
+  --radius-xl: 1.25rem;     /* 20px */
+  --radius-pill: 9999px;
+  
+  /* === TRANSIÇÕES === */
+  --transition-fast: 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  --transition-base: 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  --transition-slow: 300ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  
+  /* === DIMENSÕES === */
+  --input-height: 44px;
+  --button-height: 48px;
+  --container-max: 1200px;
+  --grid-gutter: 24px;
+}
+
