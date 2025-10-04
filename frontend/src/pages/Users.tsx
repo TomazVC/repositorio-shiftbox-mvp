@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { useApi } from '../hooks/useApi'
 import { useToast } from '../hooks/useToast'
 import Toast from '../components/Toast'
 import Modal from '../components/Modal'
@@ -7,6 +6,7 @@ import ConfirmDialog from '../components/ConfirmDialog'
 import Badge from '../components/Badge'
 import Button from '../components/Button'
 import Select from '../components/Select'
+import Input from '../components/Input'
 
 interface User {
   id: number
@@ -22,8 +22,15 @@ export default function Users() {
   const [loading, setLoading] = useState(true)
   const [editingUser, setEditingUser] = useState<User | null>(null)
   const [deletingUserId, setDeletingUserId] = useState<number | null>(null)
-  const { get } = useApi()
-  const { toasts, removeToast, success, error } = useToast()
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [createForm, setCreateForm] = useState({
+    name: '',
+    email: '',
+    saldo: '',
+    kyc_status: 'pending' as 'pending' | 'approved' | 'rejected'
+  })
+  const [createLoading, setCreateLoading] = useState(false)
+  const { toasts, removeToast, success } = useToast()
 
   // Mock data por enquanto (será substituído por API real)
   const mockUsers: User[] = [
@@ -105,6 +112,43 @@ export default function Users() {
     setDeletingUserId(null)
   }
 
+  const handleCreateUser = async () => {
+    if (!createForm.name || !createForm.email || !createForm.saldo) {
+      return
+    }
+
+    setCreateLoading(true)
+
+    try {
+      // TODO: Integrar com API real
+      // await post('/users', createForm)
+      
+      // Simulação local
+      const newUser: User = {
+        id: Math.max(...users.map(u => u.id)) + 1,
+        name: createForm.name,
+        email: createForm.email,
+        kyc_status: createForm.kyc_status,
+        saldo: parseFloat(createForm.saldo),
+        created_at: new Date().toISOString()
+      }
+
+      setUsers(prev => [...prev, newUser])
+      success('Usuário criado com sucesso!')
+      setIsCreateModalOpen(false)
+      setCreateForm({
+        name: '',
+        email: '',
+        saldo: '',
+        kyc_status: 'pending'
+      })
+    } catch (error) {
+      console.error('Erro ao criar usuário:', error)
+    } finally {
+      setCreateLoading(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="text-center py-12">
@@ -167,6 +211,70 @@ export default function Users() {
         </Modal>
       )}
 
+      {/* Modal de Criação */}
+      <Modal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        title="Novo Usuário"
+        size="md"
+      >
+        <div className="space-y-4">
+          <Input
+            label="Nome Completo"
+            placeholder="Digite o nome completo"
+            value={createForm.name}
+            onChange={(e) => setCreateForm(prev => ({ ...prev, name: e.target.value }))}
+          />
+
+          <Input
+            label="Email"
+            type="email"
+            placeholder="usuario@email.com"
+            value={createForm.email}
+            onChange={(e) => setCreateForm(prev => ({ ...prev, email: e.target.value }))}
+          />
+
+          <Input
+            label="Saldo Inicial"
+            type="number"
+            placeholder="0.00"
+            hint="Valor em reais (R$)"
+            value={createForm.saldo}
+            onChange={(e) => setCreateForm(prev => ({ ...prev, saldo: e.target.value }))}
+          />
+
+          <Select
+            label="Status KYC"
+            value={createForm.kyc_status}
+            onChange={(e) => setCreateForm(prev => ({ 
+              ...prev, 
+              kyc_status: e.target.value as 'pending' | 'approved' | 'rejected' 
+            }))}
+          >
+            <option value="pending">Pendente</option>
+            <option value="approved">Aprovado</option>
+            <option value="rejected">Rejeitado</option>
+          </Select>
+
+          <div className="flex gap-3 justify-end pt-4">
+            <Button
+              variant="secondary"
+              onClick={() => setIsCreateModalOpen(false)}
+              disabled={createLoading}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleCreateUser}
+              loading={createLoading}
+            >
+              Criar Usuário
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
       {/* Dialog de Confirmação */}
       <ConfirmDialog
         isOpen={deletingUserId !== null}
@@ -191,7 +299,7 @@ export default function Users() {
         </div>
         <Button
           variant="primary"
-          onClick={() => success('Funcionalidade em desenvolvimento')}
+          onClick={() => setIsCreateModalOpen(true)}
         >
           + Novo Usuário
         </Button>

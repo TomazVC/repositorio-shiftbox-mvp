@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { useApi } from '../hooks/useApi'
+import { useToast } from '../hooks/useToast'
 import MetricCard from '../components/MetricCard'
 import Badge from '../components/Badge'
 import Button from '../components/Button'
+import Modal from '../components/Modal'
+import Input from '../components/Input'
+import Select from '../components/Select'
+import Toast from '../components/Toast'
 
 interface Investment {
   id: number
@@ -17,8 +20,15 @@ interface Investment {
 export default function Investments() {
   const [investments, setInvestments] = useState<Investment[]>([])
   const [loading, setLoading] = useState(true)
-  const { get } = useApi()
-  const navigate = useNavigate()
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [createForm, setCreateForm] = useState({
+    user_name: '',
+    valor: '',
+    rentabilidade: '12.5',
+    status: 'ativo' as 'ativo' | 'resgatado'
+  })
+  const [createLoading, setCreateLoading] = useState(false)
+  const { toasts, removeToast, success } = useToast()
 
   // Mock data
   const mockInvestments: Investment[] = [
@@ -63,6 +73,43 @@ export default function Investments() {
     .filter(inv => inv.status === 'ativo')
     .reduce((sum, inv) => sum + inv.valor, 0)
 
+  const handleCreateInvestment = async () => {
+    if (!createForm.user_name || !createForm.valor) {
+      return
+    }
+
+    setCreateLoading(true)
+
+    try {
+      // TODO: Integrar com API real
+      // await post('/investments', createForm)
+      
+      // Simulação local
+      const newInvestment: Investment = {
+        id: Math.max(...investments.map(inv => inv.id)) + 1,
+        user_name: createForm.user_name,
+        valor: parseFloat(createForm.valor),
+        status: createForm.status,
+        rentabilidade: parseFloat(createForm.rentabilidade),
+        created_at: new Date().toISOString()
+      }
+
+      setInvestments(prev => [...prev, newInvestment])
+      success('Investimento criado com sucesso!')
+      setIsCreateModalOpen(false)
+      setCreateForm({
+        user_name: '',
+        valor: '',
+        rentabilidade: '12.5',
+        status: 'ativo'
+      })
+    } catch (error) {
+      console.error('Erro ao criar investimento:', error)
+    } finally {
+      setCreateLoading(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="text-center py-12">
@@ -74,6 +121,79 @@ export default function Investments() {
 
   return (
     <div className="space-y-8">
+      {/* Toasts */}
+      {toasts.map(toast => (
+        <Toast
+          key={toast.id}
+          message={toast.message}
+          type={toast.type}
+          onClose={() => removeToast(toast.id)}
+        />
+      ))}
+
+      {/* Modal de Criação */}
+      <Modal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        title="Novo Investimento"
+        size="md"
+      >
+        <div className="space-y-4">
+          <Input
+            label="Nome do Investidor"
+            placeholder="Digite o nome do investidor"
+            value={createForm.user_name}
+            onChange={(e) => setCreateForm(prev => ({ ...prev, user_name: e.target.value }))}
+          />
+
+          <Input
+            label="Valor do Investimento"
+            type="number"
+            placeholder="0.00"
+            hint="Valor em reais (R$)"
+            value={createForm.valor}
+            onChange={(e) => setCreateForm(prev => ({ ...prev, valor: e.target.value }))}
+          />
+
+          <Input
+            label="Rentabilidade"
+            type="number"
+            placeholder="12.5"
+            hint="Percentual anual (%)"
+            value={createForm.rentabilidade}
+            onChange={(e) => setCreateForm(prev => ({ ...prev, rentabilidade: e.target.value }))}
+          />
+
+          <Select
+            label="Status"
+            value={createForm.status}
+            onChange={(e) => setCreateForm(prev => ({ 
+              ...prev, 
+              status: e.target.value as 'ativo' | 'resgatado' 
+            }))}
+          >
+            <option value="ativo">Ativo</option>
+            <option value="resgatado">Resgatado</option>
+          </Select>
+
+          <div className="flex gap-3 justify-end pt-4">
+            <Button
+              variant="secondary"
+              onClick={() => setIsCreateModalOpen(false)}
+              disabled={createLoading}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleCreateInvestment}
+              loading={createLoading}
+            >
+              Criar Investimento
+            </Button>
+          </div>
+        </div>
+      </Modal>
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
@@ -86,7 +206,7 @@ export default function Investments() {
         </div>
         <Button
           variant="primary"
-          onClick={() => navigate('/investments/create')}
+          onClick={() => setIsCreateModalOpen(true)}
         >
           + Novo Investimento
         </Button>
@@ -97,18 +217,15 @@ export default function Investments() {
         <MetricCard
           label="Total Investido (Ativo)"
           value={formatCurrency(totalAtivo)}
-          icon="💰"
           trend={{ value: 15.2, direction: 'up' }}
         />
         <MetricCard
           label="Investimentos Ativos"
           value={investments.filter(inv => inv.status === 'ativo').length}
-          icon="✓"
         />
         <MetricCard
           label="Rentabilidade Média"
           value="12.5% a.a."
-          icon="📈"
         />
       </div>
 
