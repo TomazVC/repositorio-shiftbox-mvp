@@ -3,18 +3,17 @@ import api, { handleAPIError } from './api'
 export interface BackendInvestment {
   id: number
   user_id: number
-  amount: number
-  interest_rate: number
-  duration_months: number
-  status: 'active' | 'completed' | 'cancelled'
+  valor: number
+  taxa_rendimento: number
+  rendimento_acumulado?: number
+  status: 'ativo' | 'resgatado' | 'cancelado'
   created_at: string
-  updated_at: string
-  expected_return?: number
-  actual_return?: number
+  updated_at?: string
+  resgatado_at?: string
   user?: {
     id: number
     email: string
-    name?: string
+    full_name?: string
   }
 }
 
@@ -23,7 +22,7 @@ export interface FrontendInvestment {
   user_id: number
   user_name: string
   valor: number
-  status: 'ativo' | 'resgatado'
+  status: 'ativo' | 'resgatado' | 'cancelado'
   created_at: string
   rentabilidade: number
 }
@@ -70,16 +69,16 @@ export const investmentService = {
    */
   async createInvestment(investmentData: {
     user_id: number
-    amount: number
-    duration_months?: number
-    interest_rate?: number
+    valor: number
+    taxa_rendimento?: number
   }): Promise<FrontendInvestment> {
     try {
       const payload = {
         user_id: investmentData.user_id,
-        amount: investmentData.amount,
-        duration_months: investmentData.duration_months || 12,
-        interest_rate: investmentData.interest_rate || 1.2 // 1.2% padrão
+        valor: investmentData.valor,
+        taxa_rendimento: investmentData.taxa_rendimento || 1.2,
+        rendimento_acumulado: 0,
+        status: 'ativo'
       }
 
       const response = await api.post('/investments', payload)
@@ -106,13 +105,11 @@ export const investmentService = {
   },
 
   /**
-   * Resgatar investimento (alterar status para completed)
+   * Resgatar investimento
    */
   async redeemInvestment(id: number): Promise<FrontendInvestment> {
     try {
-      const response = await api.put(`/investments/${id}`, {
-        status: 'completed'
-      })
+      const response = await api.post(`/investments/${id}/redeem`)
       return this.transformBackendInvestment(response.data)
     } catch (error) {
       throw handleAPIError(error)
@@ -169,13 +166,13 @@ export const investmentService = {
     return {
       id: backendInvestment.id,
       user_id: backendInvestment.user_id,
-      user_name: backendInvestment.user?.name || 
+      user_name: backendInvestment.user?.full_name || 
                  backendInvestment.user?.email?.split('@')[0] || 
                  `Usuário ${backendInvestment.user_id}`,
-      valor: backendInvestment.amount,
-      status: this.mapStatus(backendInvestment.status),
+      valor: backendInvestment.valor,
+      status: backendInvestment.status,
       created_at: backendInvestment.created_at,
-      rentabilidade: backendInvestment.interest_rate || 1.2 // Rentabilidade em %
+      rentabilidade: backendInvestment.taxa_rendimento || 1.2
     }
   },
 

@@ -2,7 +2,7 @@
 from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import auth, investments, loans, pool, transactions, users, wallets
+from app.api import auth, investments, loans, pool, transactions, users, wallets, kyc
 
 # Carregar variáveis de ambiente do arquivo .env se existir
 env_file = Path(__file__).parent.parent / ".env"
@@ -39,6 +39,7 @@ app.include_router(wallets.router)
 app.include_router(investments.router)
 app.include_router(loans.router)
 app.include_router(transactions.router)
+app.include_router(kyc.router)
 
 
 @app.get("/")
