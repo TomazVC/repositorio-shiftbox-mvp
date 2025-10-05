@@ -5,7 +5,7 @@ import os
 os.environ["USE_SQLITE"] = "true"
 
 from app.db import engine, SessionLocal
-from app.models import Base, User
+from app.models import Base, User, Wallet
 from app.services.auth_service import AuthService
 from datetime import date
 
@@ -39,8 +39,18 @@ def create_admin():
         )
         
         db.add(admin_user)
+        db.flush()  # Para obter o ID do usuário
+        
+        # Criar carteira para o admin
+        admin_wallet = Wallet(
+            user_id=admin_user.id,
+            saldo=0.0
+        )
+        
+        db.add(admin_wallet)
         db.commit()
         print("✅ Usuário admin criado com sucesso!")
+        print("💰 Carteira admin criada!")
         print("📧 Email: admin@shiftbox.com")
         print("🔑 Senha: admin123")
         
