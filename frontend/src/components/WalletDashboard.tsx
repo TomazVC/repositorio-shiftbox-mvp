@@ -3,6 +3,8 @@ import { useWallet, useTransactions } from '../hooks/useWallet'
 import Card from './Card'
 import Button from './Button'
 import Input from './Input'
+import AlertModal from './AlertModal'
+import { useAlert } from '../hooks/useAlert'
 import { formatCurrency } from '../utils/format'
 
 interface WalletDashboardProps {
@@ -12,6 +14,7 @@ interface WalletDashboardProps {
 const WalletDashboard = ({ userId }: WalletDashboardProps) => {
   const { wallet, loading: walletLoading, processDeposit, processWithdraw } = useWallet(userId)
   const { transactions, loading: transactionsLoading } = useTransactions(userId)
+  const { alertState, showError, showSuccess, hideAlert } = useAlert()
   
   const [depositAmount, setDepositAmount] = useState('')
   const [withdrawAmount, setWithdrawAmount] = useState('')
@@ -21,7 +24,7 @@ const WalletDashboard = ({ userId }: WalletDashboardProps) => {
 
   const handleDeposit = async () => {
     if (!depositAmount || isNaN(Number(depositAmount))) {
-      alert('Digite um valor válido para depósito')
+      showError('Valor Inválido', 'Digite um valor válido para depósito')
       return
     }
 
@@ -30,9 +33,10 @@ const WalletDashboard = ({ userId }: WalletDashboardProps) => {
       await processDeposit(Number(depositAmount), pixKey || undefined)
       setDepositAmount('')
       setPixKey('')
-      alert('Depósito realizado com sucesso!')
+      showSuccess('Depósito Realizado', `Depósito de ${formatCurrency(Number(depositAmount))} realizado com sucesso! 💰`)
     } catch (error) {
       console.error('Erro no depósito:', error)
+      showError('Erro no Depósito', 'Erro ao processar depósito. Tente novamente.')
     } finally {
       setProcessing(false)
     }
@@ -40,12 +44,12 @@ const WalletDashboard = ({ userId }: WalletDashboardProps) => {
 
   const handleWithdraw = async () => {
     if (!withdrawAmount || isNaN(Number(withdrawAmount))) {
-      alert('Digite um valor válido para saque')
+      showError('Valor Inválido', 'Digite um valor válido para saque')
       return
     }
 
     if (!pixKey.trim()) {
-      alert('Digite uma chave PIX válida')
+      showError('Chave PIX Inválida', 'Digite uma chave PIX válida')
       return
     }
 
@@ -54,9 +58,10 @@ const WalletDashboard = ({ userId }: WalletDashboardProps) => {
       await processWithdraw(Number(withdrawAmount), pixKey)
       setWithdrawAmount('')
       setPixKey('')
-      alert('Saque realizado com sucesso!')
+      showSuccess('Saque Realizado', `Saque de ${formatCurrency(Number(withdrawAmount))} realizado com sucesso! 🏦\n\nEnviado para: ${pixKey}`)
     } catch (error) {
       console.error('Erro no saque:', error)
+      showError('Erro no Saque', 'Erro ao processar saque. Tente novamente.')
     } finally {
       setProcessing(false)
     }
@@ -255,6 +260,18 @@ const WalletDashboard = ({ userId }: WalletDashboardProps) => {
           </div>
         )}
       </Card>
+      
+      <AlertModal
+        isOpen={alertState.isOpen}
+        type={alertState.type}
+        title={alertState.title}
+        message={alertState.message}
+        onClose={hideAlert}
+        onConfirm={alertState.onConfirm}
+        confirmText={alertState.confirmText}
+        cancelText={alertState.cancelText}
+        showCancel={alertState.showCancel}
+      />
     </div>
   )
 }

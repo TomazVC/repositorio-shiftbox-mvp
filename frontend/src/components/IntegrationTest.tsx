@@ -5,6 +5,8 @@ import { useInvestments } from '../hooks/useInvestments'
 import { useWallet } from '../hooks/useWallet'
 import Card from '../components/Card'
 import Button from '../components/Button'
+import AlertModal from '../components/AlertModal'
+import { useAlert } from '../hooks/useAlert'
 import { formatCurrency } from '../utils/format'
 
 interface IntegrationTestProps {
@@ -15,6 +17,7 @@ const IntegrationTest = ({ userId = 1 }: IntegrationTestProps) => {
   const [poolData, setPoolData] = useState<any>(null)
   const [testResults, setTestResults] = useState<Record<string, boolean>>({})
   const [loading, setLoading] = useState(false)
+  const { alertState, showSuccess, showError, hideAlert } = useAlert()
 
   // Hooks
   const { users, isLoading: usersLoading } = useUsers()
@@ -98,10 +101,10 @@ const IntegrationTest = ({ userId = 1 }: IntegrationTestProps) => {
     try {
       const result = await apiAdapter.processDeposit(userId, 100, 'test@test.com')
       console.log('✅ Deposit test successful:', result)
-      alert('Depósito de teste realizado com sucesso!')
+      showSuccess('Teste Concluído', 'Depósito de teste realizado com sucesso! 💰')
     } catch (error) {
       console.error('❌ Deposit test failed:', error)
-      alert('Falha no teste de depósito')
+      showError('Teste Falhou', 'Falha no teste de depósito')
     }
   }
 
@@ -205,9 +208,9 @@ const IntegrationTest = ({ userId = 1 }: IntegrationTestProps) => {
             ) : (
               <div className="text-sm space-y-1">
                 <p>Total: {users.length}</p>
-                <p>Aprovados: {users.filter(u => u.kyc_status === 'approved').length}</p>
-                <p>Pendentes: {users.filter(u => u.kyc_status === 'pending').length}</p>
-                <p>Rejeitados: {users.filter(u => u.kyc_status === 'rejected').length}</p>
+                <p>Aprovados: {users.filter(u => u.kyc_status === 'aprovado').length}</p>
+                <p>Pendentes: {users.filter(u => u.kyc_status === 'pendente').length}</p>
+                <p>Rejeitados: {users.filter(u => u.kyc_status === 'rejeitado').length}</p>
               </div>
             )}
           </div>
@@ -250,6 +253,18 @@ const IntegrationTest = ({ userId = 1 }: IntegrationTestProps) => {
           <p>⏳ = Teste em andamento</p>
         </div>
       </Card>
+      
+      <AlertModal
+        isOpen={alertState.isOpen}
+        type={alertState.type}
+        title={alertState.title}
+        message={alertState.message}
+        onClose={hideAlert}
+        onConfirm={alertState.onConfirm}
+        confirmText={alertState.confirmText}
+        cancelText={alertState.cancelText}
+        showCancel={alertState.showCancel}
+      />
     </div>
   )
 }
