@@ -1,6 +1,7 @@
 import { ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import Icon, { IconName } from './Icon'
+import Chatbot from './Chatbot'
 
 interface LayoutProps {
   children: ReactNode
@@ -32,6 +33,9 @@ export default function Layout({ children }: LayoutProps) {
   }
 
   const isActive = (path: string) => location.pathname === path
+
+  // Não exibir chatbot na página de login
+  const shouldShowChatbot = location.pathname !== '/login'
 
   return (
     <div className="min-h-screen flex" style={{ backgroundColor: 'var(--bg-page)' }}>
@@ -156,6 +160,9 @@ export default function Layout({ children }: LayoutProps) {
           {children}
         </main>
       </div>
+
+      {/* Chatbot */}
+      {shouldShowChatbot && <Chatbot />}
     </div>
   )
 }
