@@ -30,11 +30,28 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    // Log detalhado do erro
+    console.error('API Error:', {
+      url: error.config?.url,
+      method: error.config?.method,
+      status: error.response?.status,
+      data: error.response?.data,
+      message: error.message
+    })
+    
     if (error.response?.status === 401) {
       // Token expirado ou inválido
       localStorage.removeItem('token')
       localStorage.removeItem('user')
-      window.location.href = '/login'
+      
+      // Evitar redirect em loop se já estiver na página de login
+      if (!window.location.pathname.includes('/login')) {
+        window.location.href = '/login'
+      }
+    }
+    
+    if (error.response?.status === 403) {
+      console.warn('Acesso negado:', error.config.url)
     }
     
     if (error.response?.status === 404) {
@@ -60,21 +77,45 @@ export class APIError extends Error {
   }
 }
 
-export const handleAPIError = (error: any) => {
+export const handleAPIError = (error: any): APIError => {
+  console.error('Handling API Error:', error)
+  
   if (error.response) {
     const { status, data } = error.response
-    throw new APIError(
-      data.detail || data.message || 'Erro na API',
-      status,
-      data.code
-    )
+    
+    // Mensagens específicas por status
+    const statusMessages: { [key: number]: string } = {
+      400: 'Dados inválidos enviados',
+      401: 'Não autorizado. Faça login novamente',
+      403: 'Acesso negado',
+      404: 'Recurso não encontrado',
+      409: 'Conflito de dados',
+      422: 'Dados inválidos',
+      429: 'Muitas tentativas. Tente novamente mais tarde',
+      500: 'Erro interno do servidor',
+      502: 'Servidor indisponível',
+      503: 'Serviço temporariamente indisponível'
+    }
+    
+    const message = data?.detail || 
+                   data?.message || 
+                   statusMessages[status] || 
+                   `Erro HTTP ${status}`
+    
+    return new APIError(message, status, data?.code)
   }
   
   if (error.request) {
-    throw new APIError('Erro de conexão com o servidor', 0)
+    // Erro de rede
+    if (error.code === 'ECONNABORTED') {
+      return new APIError('Tempo limite excedido. Tente novamente', 0, 'TIMEOUT')
+    }
+    
+    return new APIError('Erro de conexão. Verifique sua internet', 0, 'NETWORK_ERROR')
   }
   
-  throw new APIError(error.message || 'Erro desconhecido', 0)
+  // Erro genérico
+  return new APIError(error.message || 'Erro inesperado', 0, 'UNKNOWN_ERROR')
 }
 
 export default api
