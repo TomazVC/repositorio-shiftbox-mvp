@@ -108,19 +108,19 @@ export default function Dashboard({ navigation }: Props) {
         onPress: () => navigation.navigate('Invest'),
       },
       {
-        icon: 'file-upload-outline',
-        label: 'Enviar documentos',
-        onPress: () => Alert.alert('Em breve', 'Estamos finalizando esta funcionalidade.'),
+        icon: 'finance',
+        label: 'Meus investimentos',
+        onPress: () => navigation.getParent()?.navigate('InvestmentDetails'),
       },
       {
         icon: 'bank-outline',
         label: 'Solicitar empréstimo',
-        onPress: () => navigation.navigate('LoanRequest'),
+        onPress: () => navigation.getParent()?.navigate('LoanRequest'),
       },
       {
-        icon: 'receipt',
-        label: 'Ver extrato',
-        onPress: () => navigation.navigate('Transactions'),
+        icon: 'bell-outline',
+        label: 'Notificações',
+        onPress: () => navigation.getParent()?.navigate('Notifications'),
       },
     ], [navigation]
   );
@@ -173,7 +173,7 @@ export default function Dashboard({ navigation }: Props) {
 
   const handleLogout = async () => {
     await authService.logout();
-    navigation.replace('Login');
+    navigation.getParent()?.navigate('Login');
   };
 
   return (
@@ -187,10 +187,21 @@ export default function Dashboard({ navigation }: Props) {
           <Text style={styles.greeting}>Olá,</Text>
           <Text style={styles.userName}>{userName}</Text>
         </View>
-        <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
-          <MaterialCommunityIcons name="logout" size={18} color={COLORS.ERROR} />
-          <Text style={styles.logoutText}>Sair</Text>
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity 
+            onPress={() => navigation.getParent()?.navigate('Notifications')} 
+            style={styles.notificationButton}
+          >
+            <MaterialCommunityIcons name="bell-outline" size={24} color={COLORS.TEXT_PRIMARY} />
+            <View style={styles.notificationBadge}>
+              <Text style={styles.notificationBadgeText}>2</Text>
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
+            <MaterialCommunityIcons name="logout" size={18} color={COLORS.ERROR} />
+            <Text style={styles.logoutText}>Sair</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.balanceCard}>
@@ -207,7 +218,7 @@ export default function Dashboard({ navigation }: Props) {
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.actionButton, styles.actionButtonSecondary]}
-            onPress={() => Alert.alert('Em breve', 'Estamos finalizando esta funcionalidade.')}
+            onPress={() => navigation.getParent()?.navigate('Withdraw')}
           >
             <Text style={styles.actionButtonTextSecondary}>Sacar</Text>
           </TouchableOpacity>
@@ -471,5 +482,30 @@ const styles = StyleSheet.create({
   transactionAmount: {
     fontSize: FONT_SIZES.BODY,
     fontWeight: '600',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.BASE,
+  },
+  notificationButton: {
+    position: 'relative',
+    padding: SPACING.SM,
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: COLORS.ERROR,
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notificationBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: COLORS.PRIMARY_CONTRAST,
   },
 });
