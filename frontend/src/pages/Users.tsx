@@ -1,65 +1,95 @@
 import { useEffect, useState } from 'react'
 import { useToast } from '../hooks/useToast'
-import Toast from '../components/Toast'
+import { useRetry, useAsyncOperation } from '../hooks/useRetry'
+import { useFormValidation, validators } from '../hooks/useFormValidation'
+import { ToastContainer } from '../components/Toast'
 import Modal from '../components/Modal'
 import ConfirmDialog from '../components/ConfirmDialog'
 import Badge from '../components/Badge'
 import Button from '../components/Button'
 import Select from '../components/Select'
 import Input from '../components/Input'
+import ErrorBoundary, { ApiErrorFallback } from '../components/ErrorBoundary'
+import { TableSkeleton } from '../components/Skeletons'
+import FileUpload from '../components/FileUpload'
+import CreditScoreCard from '../components/CreditScoreCard'
+import ScoreHistoryChart from '../components/ScoreHistoryChart'
+import { User, mockUsers, getCreditScoreByUserId, getScoreHistoryByUserId } from '../data/mockData'
+import Icon from '../components/Icon'
 
-interface User {
-  id: number
-  name: string
-  email: string
-  kyc_status: 'pending' | 'approved' | 'rejected'
-  saldo: number
-  created_at: string
-}
-
-export default function Users() {
+function UsersContent() {
   const [users, setUsers] = useState<User[]>([])
-  const [loading, setLoading] = useState(true)
   const [editingUser, setEditingUser] = useState<User | null>(null)
   const [deletingUserId, setDeletingUserId] = useState<number | null>(null)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
-  const [createForm, setCreateForm] = useState({
-    name: '',
-    email: '',
-    saldo: '',
-    kyc_status: 'pending' as 'pending' | 'approved' | 'rejected'
+  const [uploadingUserId, setUploadingUserId] = useState<number | null>(null)
+  const [selectedUserForHash, setSelectedUserForHash] = useState<User | null>(null)
+  const [selectedUserForScore, setSelectedUserForScore] = useState<User | null>(null)
+  
+  const { toasts, removeToast, success, error, loading: toastLoading } = useToast()
+  const { execute: executeCreate, isLoading: createLoading } = useAsyncOperation<User>()
+  const { execute: executeDelete, isLoading: deleteLoading } = useAsyncOperation<void>()
+  
+  // Form validation for create user
+  const {
+    values: createForm,
+    errors: createFormErrors,
+    touched: createFormTouched,
+    setValue: setCreateFormValue,
+    setFieldTouched: setCreateFormFieldTouched,
+    validateForm: validateCreateForm,
+    resetForm: resetCreateForm
+  } = useFormValidation(
+    {
+      name: '',
+      email: '',
+      saldo: '',
+      kyc_status: 'pending' as 'pending' | 'approved' | 'rejected'
+    },
+    {
+      name: { 
+        required: true, 
+        minLength: 2,
+        message: 'Nome deve ter pelo menos 2 caracteres'
+      },
+      email: { 
+        required: true, 
+        custom: validators.email,
+        message: 'E-mail é obrigatório'
+      },
+      saldo: { 
+        required: true, 
+        custom: validators.positiveNumber,
+        message: 'Saldo deve ser um valor positivo'
+      }
+    }
+  )
+  
+  const { 
+    execute: loadUsers, 
+    retry: retryLoadUsers, 
+    isLoading: loading, 
+    error: loadError 
+  } = useRetry(async () => {
+    // TODO: Substituir por chamada real à API quando backend estiver pronto
+    // return await api.get('/users')
+    
+    // Mock para desenvolvimento
+    await new Promise(resolve => setTimeout(resolve, 800))
+    return mockUsers
+  }, {
+    maxRetries: 3,
+    retryDelay: 2000,
+    onError: () => error('Erro ao carregar usuários. Tentando novamente...')
   })
-  const [createLoading, setCreateLoading] = useState(false)
-  const { toasts, removeToast, success } = useToast()
-
-  // Mock data por enquanto (será substituído por API real)
-  const mockUsers: User[] = [
-    { id: 1, name: 'João Silva', email: 'joao@email.com', kyc_status: 'approved', saldo: 15000, created_at: '2025-01-15' },
-    { id: 2, name: 'Maria Santos', email: 'maria@email.com', kyc_status: 'pending', saldo: 28000, created_at: '2025-01-16' },
-    { id: 3, name: 'Pedro Costa', email: 'pedro@email.com', kyc_status: 'approved', saldo: 42000, created_at: '2025-01-14' },
-    { id: 4, name: 'Ana Oliveira', email: 'ana@email.com', kyc_status: 'rejected', saldo: 0, created_at: '2025-01-17' },
-  ]
 
   useEffect(() => {
-    loadUsers()
+    loadUsers().then(data => {
+      if (data) setUsers(data)
+    }).catch(() => {
+      // Error já tratado pelo hook useRetry
+    })
   }, [])
-
-  const loadUsers = async () => {
-    try {
-      // TODO: Substituir por chamada real à API quando backend estiver pronto
-      // const response = await get('/users')
-      // setUsers(response.data)
-      
-      // Por enquanto, usando mock
-      setTimeout(() => {
-        setUsers(mockUsers)
-        setLoading(false)
-      }, 500)
-    } catch (error) {
-      console.error('Erro ao carregar usuários:', error)
-      setLoading(false)
-    }
-  }
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -86,89 +116,248 @@ export default function Users() {
     setEditingUser(user)
   }
 
-  const handleSaveUser = (updatedStatus: string) => {
+  const handleSaveUser = async (updatedStatus: string) => {
     if (!editingUser) return
 
-    // TODO: Integrar com API real
-    // await put(`/users/${editingUser.id}`, { kyc_status: updatedStatus })
-
-    // Atualizar localmente
-    setUsers(prev =>
-      prev.map(u =>
-        u.id === editingUser.id ? { ...u, kyc_status: updatedStatus as any } : u
-      )
-    )
-
-    success('Status KYC atualizado com sucesso!')
-    setEditingUser(null)
-  }
-
-  const handleDeleteUser = (userId: number) => {
-    // TODO: Integrar com API real
-    // await delete(`/users/${userId}`)
-
-    setUsers(prev => prev.filter(u => u.id !== userId))
-    success('Usuário excluído com sucesso!')
-    setDeletingUserId(null)
-  }
-
-  const handleCreateUser = async () => {
-    if (!createForm.name || !createForm.email || !createForm.saldo) {
-      return
-    }
-
-    setCreateLoading(true)
+    const loadingToast = toastLoading('Atualizando status KYC...')
 
     try {
       // TODO: Integrar com API real
-      // await post('/users', createForm)
-      
+      // await api.put(`/users/${editingUser.id}`, { kyc_status: updatedStatus })
+
       // Simulação local
-      const newUser: User = {
-        id: Math.max(...users.map(u => u.id)) + 1,
-        name: createForm.name,
-        email: createForm.email,
-        kyc_status: createForm.kyc_status,
-        saldo: parseFloat(createForm.saldo),
-        created_at: new Date().toISOString()
-      }
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      
+      setUsers(prev =>
+        prev.map(u =>
+          u.id === editingUser.id ? { ...u, kyc_status: updatedStatus as any } : u
+        )
+      )
+
+      loadingToast.success('Status KYC atualizado com sucesso!')
+      setEditingUser(null)
+    } catch (err) {
+      loadingToast.error('Erro ao atualizar status KYC')
+    }
+  }
+
+  const handleDeleteUser = async (userId: number) => {
+    try {
+      await executeDelete(async () => {
+        // TODO: Integrar com API real
+        // await api.delete(`/users/${userId}`)
+        
+        // Simulação local
+        await new Promise(resolve => setTimeout(resolve, 1500))
+      })
+
+      setUsers(prev => prev.filter(u => u.id !== userId))
+      success('Usuário excluído com sucesso!')
+      setDeletingUserId(null)
+    } catch (err) {
+      error('Erro ao excluir usuário. Tente novamente.')
+    }
+  }
+
+  const handleCreateUser = async () => {
+    if (!validateCreateForm()) {
+      error('Preencha todos os campos corretamente')
+      return
+    }
+
+    try {
+      const newUser = await executeCreate(async () => {
+        // TODO: Integrar com API real
+        // return await api.post('/users', createForm)
+        
+        // Simulação local
+        await new Promise(resolve => setTimeout(resolve, 1200))
+        
+        return {
+          id: Math.max(...users.map(u => u.id)) + 1,
+          name: createForm.name,
+          email: createForm.email,
+          kyc_status: createForm.kyc_status,
+          saldo: parseFloat(createForm.saldo),
+          created_at: new Date().toISOString()
+        }
+      })
 
       setUsers(prev => [...prev, newUser])
       success('Usuário criado com sucesso!')
       setIsCreateModalOpen(false)
-      setCreateForm({
-        name: '',
-        email: '',
-        saldo: '',
-        kyc_status: 'pending'
-      })
-    } catch (error) {
-      console.error('Erro ao criar usuário:', error)
-    } finally {
-      setCreateLoading(false)
+      resetCreateForm()
+    } catch (err) {
+      error('Erro ao criar usuário. Verifique os dados e tente novamente.')
+    }
+  }
+
+  const handleKycUpload = async (_files: File[]) => {
+    if (!uploadingUserId) return
+    
+    const loadingToast = toastLoading('Enviando documentos KYC...')
+    
+    try {
+      // TODO: Integrar com API real
+      // const formData = new FormData()
+      // files.forEach(file => formData.append('documents', file))
+      // await api.post(`/users/${uploadingUserId}/documents`, formData)
+      
+      // Simulação
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      
+      loadingToast.success('Documentos KYC enviados com sucesso!')
+      setUploadingUserId(null)
+    } catch (err) {
+      loadingToast.error('Erro ao enviar documentos KYC')
     }
   }
 
   if (loading) {
+    return <TableSkeleton />
+  }
+
+  if (loadError) {
     return (
-      <div className="text-center py-12">
-        <div className="skeleton h-8 w-64 mx-auto mb-4"></div>
-        <div className="skeleton h-4 w-96 mx-auto"></div>
-      </div>
+      <ApiErrorFallback 
+        error={loadError} 
+        onRetry={retryLoadUsers}
+        showDetails
+      />
     )
   }
 
   return (
     <div className="space-y-8">
-      {/* Toasts */}
-      {toasts.map(toast => (
-        <Toast
-          key={toast.id}
-          message={toast.message}
-          type={toast.type}
-          onClose={() => removeToast(toast.id)}
-        />
-      ))}
+      {/* Toast Container */}
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
+
+      {/* Modal de Upload KYC */}
+      {uploadingUserId && (
+        <Modal
+          isOpen={!!uploadingUserId}
+          onClose={() => setUploadingUserId(null)}
+          title="Upload de Documentos KYC"
+          size="md"
+        >
+          <div className="space-y-4">
+            <p className="text-body" style={{ color: 'var(--text-secondary)' }}>
+              Faça upload dos documentos KYC para o usuário selecionado.
+            </p>
+            
+            <FileUpload
+              label="Documentos KYC"
+              onFileSelect={(file) => handleKycUpload([file])}
+              accept="image/*,.pdf"
+              maxSize={10}
+              hint="Envie documentos em PDF ou imagem (máx. 10MB)"
+            />
+
+            <div className="flex gap-3 justify-end pt-4">
+              <Button
+                variant="secondary"
+                onClick={() => setUploadingUserId(null)}
+              >
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Modal de Score de Crédito */}
+      {selectedUserForScore && (
+        <Modal
+          isOpen={!!selectedUserForScore}
+          onClose={() => setSelectedUserForScore(null)}
+          title={`Score de Crédito - ${selectedUserForScore.name}`}
+          size="lg"
+        >
+          <div className="space-y-6">
+            {(() => {
+              const creditScore = getCreditScoreByUserId(selectedUserForScore.id)
+              const scoreHistory = getScoreHistoryByUserId(selectedUserForScore.id)
+              
+              if (!creditScore) {
+                return (
+                  <div className="text-center py-8">
+                    <Icon name="info" className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">Score não disponível</h3>
+                    <p className="text-gray-600">
+                      O score de crédito para este usuário ainda não foi calculado.
+                    </p>
+                  </div>
+                )
+              }
+
+              return (
+                <div className="space-y-6">
+                  <CreditScoreCard creditScore={creditScore} />
+                  {scoreHistory.length > 0 && (
+                    <ScoreHistoryChart history={scoreHistory} />
+                  )}
+                </div>
+              )
+            })()}
+          </div>
+        </Modal>
+      )}
+
+      {/* Modal de Hash de Segurança */}
+      {selectedUserForHash && (
+        <Modal
+          isOpen={!!selectedUserForHash}
+          onClose={() => setSelectedUserForHash(null)}
+          title="Hash de Segurança do Usuário"
+          size="md"
+        >
+          <div className="space-y-4">
+            <div>
+              <p className="text-caption mb-1" style={{ color: 'var(--text-secondary)' }}>Usuário</p>
+              <p className="text-h2 font-semibold" style={{ color: 'var(--text-primary)' }}>
+                {selectedUserForHash.name}
+              </p>
+              <p className="text-body" style={{ color: 'var(--text-secondary)' }}>
+                {selectedUserForHash.email}
+              </p>
+            </div>
+
+            <div>
+              <p className="text-caption mb-2" style={{ color: 'var(--text-secondary)' }}>
+                Hash de Segurança
+              </p>
+              <div className="p-4 bg-gray-50 rounded-lg border">
+                <code className="text-sm font-mono break-all" style={{ color: 'var(--text-primary)' }}>
+                  {selectedUserForHash.hash || 'Hash não disponível'}
+                </code>
+              </div>
+              <p className="text-caption mt-2" style={{ color: 'var(--text-secondary)' }}>
+                Este hash é utilizado para verificação de segurança e integridade dos dados do usuário.
+              </p>
+            </div>
+
+            <div className="flex gap-3 justify-end pt-4">
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  navigator.clipboard.writeText(selectedUserForHash.hash || '')
+                  success('Hash copiado para a área de transferência!')
+                }}
+              >
+                <Icon name="copy" size={14} />
+                Copiar Hash
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => setSelectedUserForHash(null)}
+              >
+                <Icon name="x" size={14} />
+                Fechar
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* Modal de Edição */}
       {editingUser && (
@@ -223,7 +412,9 @@ export default function Users() {
             label="Nome Completo"
             placeholder="Digite o nome completo"
             value={createForm.name}
-            onChange={(e) => setCreateForm(prev => ({ ...prev, name: e.target.value }))}
+            onChange={(e) => setCreateFormValue('name', e.target.value)}
+            onBlur={() => setCreateFormFieldTouched('name')}
+            error={createFormTouched.name ? createFormErrors.name : undefined}
           />
 
           <Input
@@ -231,7 +422,9 @@ export default function Users() {
             type="email"
             placeholder="usuario@email.com"
             value={createForm.email}
-            onChange={(e) => setCreateForm(prev => ({ ...prev, email: e.target.value }))}
+            onChange={(e) => setCreateFormValue('email', e.target.value)}
+            onBlur={() => setCreateFormFieldTouched('email')}
+            error={createFormTouched.email ? createFormErrors.email : undefined}
           />
 
           <Input
@@ -240,16 +433,15 @@ export default function Users() {
             placeholder="0.00"
             hint="Valor em reais (R$)"
             value={createForm.saldo}
-            onChange={(e) => setCreateForm(prev => ({ ...prev, saldo: e.target.value }))}
+            onChange={(e) => setCreateFormValue('saldo', e.target.value)}
+            onBlur={() => setCreateFormFieldTouched('saldo')}
+            error={createFormTouched.saldo ? createFormErrors.saldo : undefined}
           />
 
           <Select
             label="Status KYC"
             value={createForm.kyc_status}
-            onChange={(e) => setCreateForm(prev => ({ 
-              ...prev, 
-              kyc_status: e.target.value as 'pending' | 'approved' | 'rejected' 
-            }))}
+            onChange={(e) => setCreateFormValue('kyc_status', e.target.value as 'pending' | 'approved' | 'rejected')}
           >
             <option value="pending">Pendente</option>
             <option value="approved">Aprovado</option>
@@ -285,6 +477,7 @@ export default function Users() {
         confirmText="Excluir"
         cancelText="Cancelar"
         type="danger"
+        loading={deleteLoading}
       />
 
       {/* Header */}
@@ -301,7 +494,8 @@ export default function Users() {
           variant="primary"
           onClick={() => setIsCreateModalOpen(true)}
         >
-          + Novo Usuário
+          <Icon name="plus" size={16} />
+          Novo Usuário
         </Button>
       </div>
 
@@ -315,6 +509,7 @@ export default function Users() {
               <th>KYC Status</th>
               <th>Saldo</th>
               <th>Data Cadastro</th>
+              <th>Hash Segurança</th>
               <th>Ações</th>
             </tr>
           </thead>
@@ -351,15 +546,46 @@ export default function Users() {
                     <Button
                       variant="ghost"
                       size="sm"
+                      onClick={() => setSelectedUserForHash(user)}
+                    >
+                      <Icon name="eye" size={14} />
+                      Ver Hash
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSelectedUserForScore(user)}
+                    >
+                      <Icon name="shield" size={14} />
+                      Score
+                    </Button>
+                  </div>
+                </td>
+                <td>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={() => handleEditUser(user)}
                     >
-                      Editar
+                      <Icon name="edit" size={14} />
+                      Editar KYC
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setUploadingUserId(user.id)}
+                    >
+                      <Icon name="upload" size={14} />
+                      Upload KYC
                     </Button>
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => setDeletingUserId(user.id)}
+                      disabled={deleteLoading}
                     >
+                      <Icon name="trash" size={14} />
                       Excluir
                     </Button>
                   </div>
@@ -370,5 +596,13 @@ export default function Users() {
         </table>
       </div>
     </div>
+  )
+}
+
+export default function Users() {
+  return (
+    <ErrorBoundary showDetails>
+      <UsersContent />
+    </ErrorBoundary>
   )
 }

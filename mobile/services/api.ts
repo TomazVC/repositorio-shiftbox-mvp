@@ -2,14 +2,12 @@ import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL, TIMEOUT } from '../config/environment';
 
-// Interface para resposta padrão da API
 export interface ApiResponse<T = any> {
   data: T;
   message?: string;
   success: boolean;
 }
 
-// Interface para erros da API
 export interface ApiError {
   message: string;
   status: number;
@@ -32,7 +30,6 @@ class ApiService {
   }
 
   private setupInterceptors() {
-    // Interceptor para adicionar token automaticamente
     this.api.interceptors.request.use(
       async (config) => {
         try {
@@ -45,29 +42,20 @@ class ApiService {
         }
         return config;
       },
-      (error) => {
-        return Promise.reject(error);
-      }
+      (error) => Promise.reject(error)
     );
 
-    // Interceptor para tratar respostas e erros
     this.api.interceptors.response.use(
-      (response: AxiosResponse) => {
-        return response;
-      },
+      (response: AxiosResponse) => response,
       async (error) => {
-        // Se token expirou, limpar storage e redirecionar para login
         if (error.response?.status === 401) {
           try {
-            await AsyncStorage.removeItem('token');
-            await AsyncStorage.removeItem('user_email');
-            // Aqui poderia redirecionar para login se necessário
+            await AsyncStorage.multiRemove(['token', 'user_email', 'user_id', 'user_name']);
           } catch (storageError) {
             console.warn('Erro ao limpar storage:', storageError);
           }
         }
 
-        // Formatar erro para interface padrão
         const apiError: ApiError = {
           message: error.response?.data?.detail || error.message || 'Erro desconhecido',
           status: error.response?.status || 500,
@@ -79,7 +67,6 @@ class ApiService {
     );
   }
 
-  // Métodos HTTP básicos
   async get<T = any>(url: string, config?: AxiosRequestConfig): Promise<T> {
     const response = await this.api.get<T>(url, config);
     return response.data;
@@ -87,6 +74,25 @@ class ApiService {
 
   async post<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
     const response = await this.api.post<T>(url, data, config);
+    return response.data;
+  }
+
+  async postForm<T = any>(url: string, data: Record<string, string>, config?: AxiosRequestConfig): Promise<T> {
+    const body = new URLSearchParams();
+    Object.entries(data).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        body.append(key, value);
+      }
+    });
+
+    const response = await this.api.post<T>(url, body.toString(), {
+      ...config,
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        ...config?.headers,
+      },
+    });
+
     return response.data;
   }
 
@@ -100,7 +106,6 @@ class ApiService {
     return response.data;
   }
 
-  // Método para fazer upload de arquivos (futuro)
   async upload<T = any>(url: string, formData: FormData, config?: AxiosRequestConfig): Promise<T> {
     const response = await this.api.post<T>(url, formData, {
       ...config,
@@ -113,8 +118,6 @@ class ApiService {
   }
 }
 
-// Instância singleton do serviço
 export const apiService = new ApiService();
 
-// Exportar também a classe para casos específicos
 export default ApiService;

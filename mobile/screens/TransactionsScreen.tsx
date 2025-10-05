@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -9,8 +9,10 @@ import {
   Alert,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { RootStackParamList, Transaction } from '../types';
 import { walletService } from '../services/walletService';
+import { authService } from '../services/authService';
 import { COLORS, FONT_SIZES, SPACING, COMPONENTS, CURRENCY, TRANSACTION_TYPES } from '../constants';
 
 type TransactionsScreenNavigationProp = NativeStackNavigationProp<
@@ -21,6 +23,8 @@ type TransactionsScreenNavigationProp = NativeStackNavigationProp<
 type Props = {
   navigation: TransactionsScreenNavigationProp;
 };
+
+type MaterialIconName = keyof typeof MaterialCommunityIcons.glyphMap;
 
 export default function TransactionsScreen({ navigation }: Props) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -34,10 +38,17 @@ export default function TransactionsScreen({ navigation }: Props) {
   const loadTransactions = async () => {
     setLoading(true);
     try {
-      const data = await walletService.getTransactions();
+      const currentUser = await authService.getCurrentUser();
+      if (!currentUser?.id) {
+        throw new Error('Não foi possível identificar o usuário logado.');
+      }
+
+      const wallet = await walletService.getWalletByUser(currentUser.id);
+      const data = await walletService.getTransactions({ walletId: wallet.id });
       setTransactions(data);
     } catch (error: any) {
-      Alert.alert('Erro', error.message || 'Erro ao carregar transações');
+      console.warn('Erro ao carregar transações:', error);
+      Alert.alert('Erro', error.message || 'Erro ao carregar transações.');
     } finally {
       setLoading(false);
     }
@@ -49,12 +60,11 @@ export default function TransactionsScreen({ navigation }: Props) {
     setRefreshing(false);
   };
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat(CURRENCY.LOCALE, {
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat(CURRENCY.LOCALE, {
       style: 'currency',
       currency: 'BRL',
     }).format(value);
-  };
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -67,165 +77,127 @@ export default function TransactionsScreen({ navigation }: Props) {
     });
   };
 
-  const getTransactionIcon = (type: string) => {
-    switch (type) {
-      case TRANSACTION_TYPES.DEPOSIT:
-        return '📥';
-      case TRANSACTION_TYPES.WITHDRAW:
-        return '📤';
-      case TRANSACTION_TYPES.INVESTMENT:
-        return '💰';
-      case TRANSACTION_TYPES.LOAN:
-        return '🏦';
-      case TRANSACTION_TYPES.RETURN:
-        return '💸';
-      default:
-        return '💳';
-    }
-  };
+  const iconNames = useMemo<Record<string, MaterialIconName>>(
+    () => ({
+      [TRANSACTION_TYPES.DEPOSITO]: 'arrow-down-bold-circle',
+      [TRANSACTION_TYPES.SAQUE]: 'arrow-up-bold-circle',
+      [TRANSACTION_TYPES.INVESTIMENTO]: 'finance',
+      [TRANSACTION_TYPES.EMPRESTIMO_RECEBIDO]: 'bank',
+      [TRANSACTION_TYPES.PAGAMENTO_EMPRESTIMO]: 'cash-minus',
+      [TRANSACTION_TYPES.RENDIMENTO]: 'trending-up',
+      [TRANSACTION_TYPES.RESGATE_INVESTIMENTO]: 'cash-refund',
+      [TRANSACTION_TYPES.AJUSTE_SALDO]: 'tune-variant',
+      [TRANSACTION_TYPES.CANCELAMENTO_INVESTIMENTO]: 'cancel',
+    }),
+    []
+  );
 
-  const getTransactionColor = (type: string) => {
-    switch (type) {
-      case TRANSACTION_TYPES.DEPOSIT:
-      case TRANSACTION_TYPES.RETURN:
-        return COLORS.SUCCESS;
-      case TRANSACTION_TYPES.WITHDRAW:
-      case TRANSACTION_TYPES.INVESTMENT:
-      case TRANSACTION_TYPES.LOAN:
-        return COLORS.ERROR;
-      default:
-        return COLORS.TEXT_SECONDARY;
-    }
-  };
+  const positiveTypes = useMemo(
+    () =>
+      new Set<string>([
+        TRANSACTION_TYPES.DEPOSITO,
+        TRANSACTION_TYPES.EMPRESTIMO_RECEBIDO,
+        TRANSACTION_TYPES.RENDIMENTO,
+        TRANSACTION_TYPES.RESGATE_INVESTIMENTO,
+        TRANSACTION_TYPES.AJUSTE_SALDO,
+      ]),
+    []
+  );
+
+  const iconFallback: MaterialIconName = 'swap-horizontal';
 
   const getTransactionLabel = (type: string) => {
     switch (type) {
-      case TRANSACTION_TYPES.DEPOSIT:
+      case TRANSACTION_TYPES.DEPOSITO:
         return 'Depósito';
-      case TRANSACTION_TYPES.WITHDRAW:
+      case TRANSACTION_TYPES.SAQUE:
         return 'Saque';
-      case TRANSACTION_TYPES.INVESTMENT:
+      case TRANSACTION_TYPES.INVESTIMENTO:
         return 'Investimento';
-      case TRANSACTION_TYPES.LOAN:
-        return 'Empréstimo';
-      case TRANSACTION_TYPES.RETURN:
-        return 'Retorno';
+      case TRANSACTION_TYPES.EMPRESTIMO_RECEBIDO:
+        return 'Empréstimo recebido';
+      case TRANSACTION_TYPES.PAGAMENTO_EMPRESTIMO:
+        return 'Pagamento de empréstimo';
+      case TRANSACTION_TYPES.RENDIMENTO:
+        return 'Rendimento';
+      case TRANSACTION_TYPES.RESGATE_INVESTIMENTO:
+        return 'Resgate de investimento';
+      case TRANSACTION_TYPES.AJUSTE_SALDO:
+        return 'Ajuste de saldo';
+      case TRANSACTION_TYPES.CANCELAMENTO_INVESTIMENTO:
+        return 'Cancelamento de investimento';
       default:
         return 'Transação';
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return COLORS.SUCCESS;
-      case 'pending':
-        return COLORS.WARNING;
-      case 'failed':
-        return COLORS.ERROR;
-      default:
-        return COLORS.TEXT_SECONDARY;
-    }
-  };
+  const getTransactionColor = (type: string) =>
+    positiveTypes.has(type) ? COLORS.SUCCESS : COLORS.ERROR;
 
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return 'Concluída';
-      case 'pending':
-        return 'Pendente';
-      case 'failed':
-        return 'Falhou';
-      default:
-        return status;
-    }
-  };
+  const renderTransaction = (transaction: Transaction) => {
+    const iconName = iconNames[transaction.tipo] ?? iconFallback;
+    const label = getTransactionLabel(transaction.tipo);
+    const color = getTransactionColor(transaction.tipo);
+    const isPositive = positiveTypes.has(transaction.tipo);
 
-  const renderTransaction = (transaction: Transaction) => (
-    <View key={transaction.id} style={styles.transactionCard}>
-      <View style={styles.transactionHeader}>
-        <View style={styles.transactionIconContainer}>
-          <Text style={styles.transactionIcon}>
-            {getTransactionIcon(transaction.type)}
-          </Text>
-        </View>
-        <View style={styles.transactionInfo}>
-          <Text style={styles.transactionType}>
-            {getTransactionLabel(transaction.type)}
-          </Text>
-          <Text style={styles.transactionDescription}>
-            {transaction.description}
-          </Text>
-          <Text style={styles.transactionDate}>
-            {formatDate(transaction.created_at)}
-          </Text>
-        </View>
-        <View style={styles.transactionAmount}>
-          <Text
-            style={[
-              styles.transactionValue,
-              { color: getTransactionColor(transaction.type) },
-            ]}
-          >
-            {transaction.type === TRANSACTION_TYPES.DEPOSIT || 
-             transaction.type === TRANSACTION_TYPES.RETURN ? '+' : '-'}
-            {formatCurrency(transaction.amount)}
-          </Text>
-          <View style={styles.statusContainer}>
-            <View
-              style={[
-                styles.statusDot,
-                { backgroundColor: getStatusColor(transaction.status) },
-              ]}
-            />
-            <Text
-              style={[
-                styles.statusText,
-                { color: getStatusColor(transaction.status) },
-              ]}
-            >
-              {getStatusLabel(transaction.status)}
+    return (
+      <View key={transaction.id} style={styles.transactionCard}>
+        <View style={styles.transactionHeader}>
+          <View style={styles.transactionIconContainer}>
+            <MaterialCommunityIcons name={iconName} size={24} color={color} />
+          </View>
+          <View style={styles.transactionInfo}>
+            <Text style={styles.transactionType}>{label}</Text>
+            {!!transaction.descricao && (
+              <Text style={styles.transactionDescription}>{transaction.descricao}</Text>
+            )}
+            <Text style={styles.transactionDate}>{formatDate(transaction.created_at)}</Text>
+          </View>
+          <View style={styles.transactionAmount}>
+            <Text style={[styles.transactionValue, { color }]}>
+              {isPositive ? '+' : '-'}
+              {formatCurrency(transaction.valor)}
             </Text>
+            <View style={styles.statusContainer}>
+              <Text style={styles.statusText}>Efetuada</Text>
+            </View>
           </View>
         </View>
       </View>
-    </View>
-  );
+    );
+  };
+
+  const hasTransactions = transactions.length > 0;
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}
-        >
-          <Text style={styles.backButtonText}>← Voltar</Text>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <MaterialCommunityIcons name="arrow-left" size={22} color={COLORS.PRIMARY} />
+          <Text style={styles.backButtonText}>Voltar</Text>
         </TouchableOpacity>
-        <Text style={styles.title}>Transações</Text>
+        <Text style={styles.title}>Extrato</Text>
       </View>
 
       <ScrollView
         style={styles.scrollView}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         <View style={styles.content}>
           {loading ? (
             <View style={styles.loadingContainer}>
               <Text style={styles.loadingText}>Carregando transações...</Text>
             </View>
-          ) : transactions.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyIcon}>📋</Text>
-              <Text style={styles.emptyTitle}>Nenhuma transação</Text>
-              <Text style={styles.emptyDescription}>
-                Suas transações aparecerão aqui quando você fizer investimentos ou empréstimos.
-              </Text>
-            </View>
+          ) : hasTransactions ? (
+            <View style={styles.transactionsList}>{transactions.map(renderTransaction)}</View>
           ) : (
-            <View style={styles.transactionsList}>
-              {transactions.map(renderTransaction)}
+            <View style={styles.emptyContainer}>
+              <MaterialCommunityIcons name="clipboard-list-outline" size={40} color={COLORS.TEXT_SECONDARY} />
+              <Text style={styles.emptyTitle}>Nenhuma transação por aqui</Text>
+              <Text style={styles.emptyDescription}>
+                Assim que você começar a investir ou solicitar empréstimos, o histórico aparece nesta tela.
+              </Text>
             </View>
           )}
         </View>
@@ -242,16 +214,20 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: SPACING.LG,
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.LG,
     paddingTop: 60,
+    paddingBottom: SPACING.SM,
     backgroundColor: COLORS.BG_CARD,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.DIVIDER,
   },
   backButton: {
-    marginRight: SPACING.BASE,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   backButtonText: {
+    marginLeft: SPACING.XS,
     fontSize: FONT_SIZES.BODY,
     color: COLORS.PRIMARY,
     fontWeight: '500',
@@ -263,6 +239,9 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: SPACING['2XL'],
   },
   content: {
     padding: SPACING.LG,
@@ -278,16 +257,12 @@ const styles = StyleSheet.create({
   emptyContainer: {
     alignItems: 'center',
     paddingVertical: SPACING['2XL'],
-  },
-  emptyIcon: {
-    fontSize: 48,
-    marginBottom: SPACING.BASE,
+    gap: SPACING.SM,
   },
   emptyTitle: {
     fontSize: FONT_SIZES.LG,
     fontWeight: '600',
     color: COLORS.TEXT_PRIMARY,
-    marginBottom: SPACING.SM,
   },
   emptyDescription: {
     fontSize: FONT_SIZES.BODY,
@@ -317,9 +292,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: SPACING.BASE,
   },
-  transactionIcon: {
-    fontSize: 20,
-  },
   transactionInfo: {
     flex: 1,
   },
@@ -347,17 +319,14 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   statusContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginRight: 4,
+    paddingHorizontal: SPACING.SM,
+    paddingVertical: 4,
+    borderRadius: COMPONENTS.INPUT_RADIUS,
+    backgroundColor: COLORS.BG_MUTED,
   },
   statusText: {
     fontSize: FONT_SIZES.XS,
     fontWeight: '500',
+    color: COLORS.TEXT_SECONDARY,
   },
 });

@@ -173,6 +173,11 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+  min-height: 120px;
+}
+
+.card-metric-compact {
+  min-height: 100px;
 }
 
 .card-metric-value {
@@ -180,6 +185,23 @@
   font-weight: var(--text-display-weight);
   line-height: var(--text-display-height);
   color: var(--text-primary);
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.card-metric-value-large {
+  font-size: var(--text-display-size);    /* 32px */
+  line-height: var(--text-display-height); /* 40px */
+}
+
+.card-metric-value-medium {
+  font-size: var(--text-h1-size);         /* 24px */
+  line-height: var(--text-h1-height);     /* 32px */
+}
+
+.card-metric-value-small {
+  font-size: var(--text-h2-size);         /* 20px */
+  line-height: var(--text-h2-height);     /* 28px */
 }
 
 .card-metric-label {
@@ -189,6 +211,27 @@
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
+}
+
+/* Responsive adjustments for metric cards */
+@media (max-width: 480px) {
+  .card-metric-value-large {
+    font-size: var(--text-h1-size);      /* 24px em telas pequenas */
+    line-height: var(--text-h1-height);  /* 32px */
+  }
+  
+  .card-metric-value-medium {
+    font-size: var(--text-h2-size);      /* 20px em telas pequenas */
+    line-height: var(--text-h2-height);  /* 28px */
+  }
+  
+  .card-metric {
+    min-height: 100px;
+  }
+  
+  .card {
+    padding: var(--space-4);
+  }
 }
 
 /* === BADGES === */

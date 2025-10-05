@@ -1,5 +1,7 @@
 import { ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
+import Icon, { IconName } from './Icon'
+import Chatbot from './Chatbot'
 
 interface LayoutProps {
   children: ReactNode
@@ -8,14 +10,16 @@ interface LayoutProps {
 interface NavItem {
   path: string
   label: string
-  icon: string
+  icon: IconName
 }
 
 const navItems: NavItem[] = [
-  { path: '/dashboard', label: 'Dashboard', icon: '📊' },
-  { path: '/users', label: 'Usuários', icon: '👥' },
-  { path: '/investments', label: 'Investimentos', icon: '💰' },
-  { path: '/loans', label: 'Empréstimos', icon: '🏦' },
+  { path: '/dashboard', label: 'Dashboard', icon: 'bar-chart' },
+  { path: '/wallet', label: 'Carteira', icon: 'wallet' },
+  { path: '/users', label: 'Usuários', icon: 'users' },
+  { path: '/investments', label: 'Investimentos', icon: 'trending-up' },
+  { path: '/loans', label: 'Empréstimos', icon: 'credit-card' },
+  { path: '/admin', label: 'Administração', icon: 'shield' },
 ]
 
 export default function Layout({ children }: LayoutProps) {
@@ -29,6 +33,9 @@ export default function Layout({ children }: LayoutProps) {
   }
 
   const isActive = (path: string) => location.pathname === path
+
+  // Não exibir chatbot na página de login
+  const shouldShowChatbot = location.pathname !== '/login'
 
   return (
     <div className="min-h-screen flex" style={{ backgroundColor: 'var(--bg-page)' }}>
@@ -85,7 +92,11 @@ export default function Layout({ children }: LayoutProps) {
                     }
                   }}
                 >
-                  <span className="text-xl">{item.icon}</span>
+                  <Icon 
+                    name={item.icon} 
+                    size={20} 
+                    color={isActive(item.path) ? 'var(--color-primary)' : 'var(--text-secondary)'}
+                  />
                   <span className="text-body">{item.label}</span>
                 </Link>
               </li>
@@ -109,7 +120,7 @@ export default function Layout({ children }: LayoutProps) {
               e.currentTarget.style.backgroundColor = 'transparent'
             }}
           >
-            <span>🚪</span>
+            <Icon name="log-out" size={18} color="var(--color-red)" />
             <span>Sair</span>
           </button>
         </div>
@@ -149,6 +160,9 @@ export default function Layout({ children }: LayoutProps) {
           {children}
         </main>
       </div>
+
+      {/* Chatbot */}
+      {shouldShowChatbot && <Chatbot />}
     </div>
   )
 }

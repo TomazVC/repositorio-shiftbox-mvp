@@ -6,23 +6,16 @@ import Button from '../components/Button'
 import Modal from '../components/Modal'
 import Input from '../components/Input'
 import Select from '../components/Select'
-import Toast from '../components/Toast'
-
-interface Investment {
-  id: number
-  user_name: string
-  valor: number
-  status: 'ativo' | 'resgatado'
-  created_at: string
-  rentabilidade: number
-}
+import { ToastContainer } from '../components/Toast'
+import { Investment, mockInvestments, getActiveUsers } from '../data/mockData'
+import Icon from '../components/Icon'
 
 export default function Investments() {
   const [investments, setInvestments] = useState<Investment[]>([])
   const [loading, setLoading] = useState(true)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [createForm, setCreateForm] = useState({
-    user_name: '',
+    user_id: '',
     valor: '',
     rentabilidade: '12.5',
     status: 'ativo' as 'ativo' | 'resgatado'
@@ -30,12 +23,8 @@ export default function Investments() {
   const [createLoading, setCreateLoading] = useState(false)
   const { toasts, removeToast, success } = useToast()
 
-  // Mock data
-  const mockInvestments: Investment[] = [
-    { id: 1, user_name: 'João Silva', valor: 10000, status: 'ativo', created_at: '2025-01-10', rentabilidade: 12.5 },
-    { id: 2, user_name: 'Maria Santos', valor: 25000, status: 'ativo', created_at: '2025-01-12', rentabilidade: 12.5 },
-    { id: 3, user_name: 'Pedro Costa', valor: 15000, status: 'resgatado', created_at: '2025-01-08', rentabilidade: 12.5 },
-  ]
+  // Obter apenas usuários ativos (KYC aprovado)
+  const activeUsers = getActiveUsers()
 
   useEffect(() => {
     loadInvestments()
@@ -74,20 +63,27 @@ export default function Investments() {
     .reduce((sum, inv) => sum + inv.valor, 0)
 
   const handleCreateInvestment = async () => {
-    if (!createForm.user_name || !createForm.valor) {
+    if (!createForm.user_id || !createForm.valor) {
       return
     }
 
     setCreateLoading(true)
 
     try {
+      // Buscar dados do usuário selecionado
+      const selectedUser = activeUsers.find(user => user.id === parseInt(createForm.user_id))
+      if (!selectedUser) {
+        throw new Error('Usuário não encontrado')
+      }
+
       // TODO: Integrar com API real
       // await post('/investments', createForm)
       
       // Simulação local
       const newInvestment: Investment = {
         id: Math.max(...investments.map(inv => inv.id)) + 1,
-        user_name: createForm.user_name,
+        user_id: parseInt(createForm.user_id),
+        user_name: selectedUser.name,
         valor: parseFloat(createForm.valor),
         status: createForm.status,
         rentabilidade: parseFloat(createForm.rentabilidade),
@@ -98,7 +94,7 @@ export default function Investments() {
       success('Investimento criado com sucesso!')
       setIsCreateModalOpen(false)
       setCreateForm({
-        user_name: '',
+        user_id: '',
         valor: '',
         rentabilidade: '12.5',
         status: 'ativo'
@@ -121,15 +117,6 @@ export default function Investments() {
 
   return (
     <div className="space-y-8">
-      {/* Toasts */}
-      {toasts.map(toast => (
-        <Toast
-          key={toast.id}
-          message={toast.message}
-          type={toast.type}
-          onClose={() => removeToast(toast.id)}
-        />
-      ))}
 
       {/* Modal de Criação */}
       <Modal
@@ -139,12 +126,18 @@ export default function Investments() {
         size="md"
       >
         <div className="space-y-4">
-          <Input
-            label="Nome do Investidor"
-            placeholder="Digite o nome do investidor"
-            value={createForm.user_name}
-            onChange={(e) => setCreateForm(prev => ({ ...prev, user_name: e.target.value }))}
-          />
+          <Select
+            label="Usuário"
+            value={createForm.user_id}
+            onChange={(e) => setCreateForm(prev => ({ ...prev, user_id: e.target.value }))}
+          >
+            <option value="">Selecione um usuário</option>
+            {activeUsers.map(user => (
+              <option key={user.id} value={user.id}>
+                {user.name} - {user.email}
+              </option>
+            ))}
+          </Select>
 
           <Input
             label="Valor do Investimento"
@@ -208,7 +201,8 @@ export default function Investments() {
           variant="primary"
           onClick={() => setIsCreateModalOpen(true)}
         >
-          + Novo Investimento
+          <Icon name="plus" size={16} />
+          Novo Investimento
         </Button>
       </div>
 
@@ -262,6 +256,9 @@ export default function Investments() {
           </tbody>
         </table>
       </div>
+
+      {/* Toasts */}
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>
   )
 }

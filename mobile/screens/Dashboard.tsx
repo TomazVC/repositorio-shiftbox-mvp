@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -9,11 +9,13 @@ import {
   RefreshControl,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../types';
+import { useFocusEffect } from '@react-navigation/native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { RootStackParamList, PoolStatus, Transaction } from '../types';
 import { authService } from '../services/authService';
 import { walletService } from '../services/walletService';
 import { poolService } from '../services/poolService';
-import { COLORS, FONT_SIZES, SPACING, COMPONENTS, CURRENCY } from '../constants';
+import { COLORS, FONT_SIZES, SPACING, COMPONENTS, CURRENCY, TRANSACTION_TYPES } from '../constants';
 
 type DashboardScreenNavigationProp = NativeStackNavigationProp<
   RootStackParamList,
@@ -24,82 +26,186 @@ type Props = {
   navigation: DashboardScreenNavigationProp;
 };
 
+type MaterialIconName = keyof typeof MaterialCommunityIcons.glyphMap;
+
+type QuickAction = {
+  icon: MaterialIconName;
+  label: string;
+  onPress: () => void;
+};
+
+const transactionIcons: Record<string, MaterialIconName> = {
+  [TRANSACTION_TYPES.DEPOSITO]: 'arrow-down-bold-circle',
+  [TRANSACTION_TYPES.SAQUE]: 'arrow-up-bold-circle',
+  [TRANSACTION_TYPES.INVESTIMENTO]: 'finance',
+  [TRANSACTION_TYPES.EMPRESTIMO_RECEBIDO]: 'bank',
+  [TRANSACTION_TYPES.PAGAMENTO_EMPRESTIMO]: 'cash-minus',
+  [TRANSACTION_TYPES.RENDIMENTO]: 'trending-up',
+  [TRANSACTION_TYPES.RESGATE_INVESTIMENTO]: 'cash-refund',
+  [TRANSACTION_TYPES.AJUSTE_SALDO]: 'tune-variant',
+  [TRANSACTION_TYPES.CANCELAMENTO_INVESTIMENTO]: 'cancel',
+};
+
 export default function Dashboard({ navigation }: Props) {
-  const [userEmail, setUserEmail] = useState('');
+  const [userName, setUserName] = useState('Usuário');
   const [walletBalance, setWalletBalance] = useState(0);
-  const [poolStatus, setPoolStatus] = useState<any>(null);
+  const [poolStatus, setPoolStatus] = useState<PoolStatus | null>(null);
+  const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    loadUserData();
-    loadDashboardData();
-  }, []);
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat(CURRENCY.LOCALE, {
+      style: 'currency',
+      currency: 'BRL',
+    }).format(value);
 
-  const loadUserData = async () => {
-    const user = await authService.getCurrentUser();
-    setUserEmail(user?.email || 'Usuário');
-  };
-
-  const loadDashboardData = async () => {
+  const loadDashboard = useCallback(async () => {
     setLoading(true);
     try {
-      // Carregar saldo da carteira
-      const wallet = await walletService.getWallet();
+      const user = await authService.getCurrentUser();
+      if (!user?.id) {
+        throw new Error('Não foi possível identificar o usuário.');
+      }
+
+      setUserName(user.full_name ?? user.email ?? 'Usuário');
+
+      const wallet = await walletService.getWalletByUser(user.id);
       setWalletBalance(wallet.saldo);
 
-      // Carregar status do pool
-      const pool = await poolService.getPoolStatus();
+      const [pool, transactions] = await Promise.all([
+        poolService.getPoolStatus(),
+        walletService.getTransactions({ walletId: wallet.id }),
+      ]);
+
       setPoolStatus(pool);
-    } catch (error) {
-      console.warn('Erro ao carregar dados do dashboard:', error);
+      setRecentTransactions(transactions.slice(0, 3));
+    } catch (error: any) {
+      console.warn('Erro ao carregar dashboard:', error);
+      Alert.alert('Erro', error.message || 'Não foi possível carregar os dados.');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadDashboard();
+    }, [loadDashboard])
+  );
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadDashboardData();
+    await loadDashboard();
     setRefreshing(false);
+  };
+
+  const quickActions: QuickAction[] = useMemo(
+    () => [
+      {
+        icon: 'chart-line',
+        label: 'Aplicar no pool',
+        onPress: () => navigation.navigate('Invest'),
+      },
+      {
+        icon: 'finance',
+        label: 'Meus investimentos',
+        onPress: () => navigation.getParent()?.navigate('InvestmentDetails'),
+      },
+      {
+        icon: 'bank-outline',
+        label: 'Solicitar empréstimo',
+        onPress: () => navigation.getParent()?.navigate('LoanRequest'),
+      },
+      {
+        icon: 'bell-outline',
+        label: 'Notificações',
+        onPress: () => navigation.getParent()?.navigate('Notifications'),
+      },
+    ], [navigation]
+  );
+
+  const renderTransactionRow = (transaction: Transaction) => {
+    const iconName = transactionIcons[transaction.tipo] ?? 'swap-horizontal';
+    const isPositive = transaction.tipo === TRANSACTION_TYPES.DEPOSITO ||
+      transaction.tipo === TRANSACTION_TYPES.EMPRESTIMO_RECEBIDO ||
+      transaction.tipo === TRANSACTION_TYPES.RENDIMENTO ||
+      transaction.tipo === TRANSACTION_TYPES.RESGATE_INVESTIMENTO ||
+      transaction.tipo === TRANSACTION_TYPES.AJUSTE_SALDO;
+
+    return (
+      <View key={transaction.id} style={styles.transactionRow}>
+        <View style={styles.transactionIconBubble}>
+          <MaterialCommunityIcons
+            name={iconName}
+            size={22}
+            color={isPositive ? COLORS.SUCCESS : COLORS.ERROR}
+          />
+        </View>
+        <View style={styles.transactionInfo}>
+          <Text style={styles.transactionLabel} numberOfLines={1}>
+            {transaction.descricao || 'Movimentação'}
+          </Text>
+          <Text style={styles.transactionDate}>{formatDate(transaction.created_at)}</Text>
+        </View>
+        <Text
+          style={[
+            styles.transactionAmount,
+            { color: isPositive ? COLORS.SUCCESS : COLORS.ERROR },
+          ]}
+        >
+          {isPositive ? '+' : '-'}{formatCurrency(transaction.valor)}
+        </Text>
+      </View>
+    );
+  };
+
+  const formatDate = (value: string) => {
+    const date = new Date(value);
+    return date.toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
   };
 
   const handleLogout = async () => {
     await authService.logout();
-    navigation.replace('Login');
-  };
-
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat(CURRENCY.LOCALE, {
-      style: 'currency',
-      currency: 'BRL',
-    }).format(value);
-  };
-
-  const showComingSoon = () => {
-    Alert.alert('Em Breve', 'Esta funcionalidade será implementada em breve!');
+    navigation.getParent()?.navigate('Login');
   };
 
   return (
-    <ScrollView 
+    <ScrollView
       style={styles.container}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-      }
+      contentContainerStyle={styles.scrollContent}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
       <View style={styles.header}>
         <View>
           <Text style={styles.greeting}>Olá,</Text>
-          <Text style={styles.userName}>{userEmail}</Text>
+          <Text style={styles.userName}>{userName}</Text>
         </View>
-        <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
-          <Text style={styles.logoutText}>Sair</Text>
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity 
+            onPress={() => navigation.getParent()?.navigate('Notifications')} 
+            style={styles.notificationButton}
+          >
+            <MaterialCommunityIcons name="bell-outline" size={24} color={COLORS.TEXT_PRIMARY} />
+            <View style={styles.notificationBadge}>
+              <Text style={styles.notificationBadgeText}>2</Text>
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
+            <MaterialCommunityIcons name="logout" size={18} color={COLORS.ERROR} />
+            <Text style={styles.logoutText}>Sair</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {/* Saldo da carteira */}
       <View style={styles.balanceCard}>
-        <Text style={styles.balanceLabel}>Saldo Disponível</Text>
+        <Text style={styles.balanceLabel}>Saldo disponível</Text>
         <Text style={styles.balanceValue}>
           {loading ? 'Carregando...' : formatCurrency(walletBalance)}
         </Text>
@@ -112,83 +218,66 @@ export default function Dashboard({ navigation }: Props) {
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.actionButton, styles.actionButtonSecondary]}
-            onPress={showComingSoon}
+            onPress={() => navigation.getParent()?.navigate('Withdraw')}
           >
             <Text style={styles.actionButtonTextSecondary}>Sacar</Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* Status do pool */}
       {poolStatus && (
         <View style={styles.poolCard}>
-          <Text style={styles.poolTitle}>Status do Pool</Text>
+          <Text style={styles.poolTitle}>Status do pool</Text>
           <View style={styles.poolInfo}>
             <View style={styles.poolItem}>
-              <Text style={styles.poolLabel}>Total no Pool</Text>
+              <Text style={styles.poolLabel}>Total</Text>
               <Text style={styles.poolValue}>{formatCurrency(poolStatus.saldo_total)}</Text>
+            </View>
+            <View style={styles.poolItem}>
+              <Text style={styles.poolLabel}>Disponível</Text>
+              <Text style={styles.poolValue}>{formatCurrency(poolStatus.saldo_disponivel)}</Text>
             </View>
             <View style={styles.poolItem}>
               <Text style={styles.poolLabel}>Utilização</Text>
               <Text style={styles.poolValue}>{poolStatus.percentual_utilizacao}%</Text>
             </View>
-            <View style={styles.poolItem}>
-              <Text style={styles.poolLabel}>Investidores</Text>
-              <Text style={styles.poolValue}>{poolStatus.total_investidores}</Text>
-            </View>
           </View>
         </View>
       )}
 
-      {/* Ações rápidas */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Ações Rápidas</Text>
+        <Text style={styles.sectionTitle}>Ações rápidas</Text>
         <View style={styles.quickActions}>
-          <TouchableOpacity 
-            style={styles.quickActionCard} 
-            onPress={() => navigation.navigate('LoanRequest')}
-          >
-            <Text style={styles.quickActionIcon}>🏦</Text>
-            <Text style={styles.quickActionText}>Pedir Empréstimo</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.quickActionCard} 
-            onPress={showComingSoon}
-          >
-            <Text style={styles.quickActionIcon}>💰</Text>
-            <Text style={styles.quickActionText}>Meus Investimentos</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.quickActionCard} 
-            onPress={showComingSoon}
-          >
-            <Text style={styles.quickActionIcon}>📈</Text>
-            <Text style={styles.quickActionText}>Rendimentos</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.quickActionCard} 
-            onPress={() => navigation.navigate('Transactions')}
-          >
-            <Text style={styles.quickActionIcon}>📋</Text>
-            <Text style={styles.quickActionText}>Extrato</Text>
-          </TouchableOpacity>
+          {quickActions.map(action => (
+            <TouchableOpacity key={action.label} style={styles.quickActionCard} onPress={action.onPress}>
+              <View style={styles.quickIconWrapper}>
+                <MaterialCommunityIcons name={action.icon} size={26} color={COLORS.PRIMARY} />
+              </View>
+              <Text style={styles.quickActionText}>{action.label}</Text>
+            </TouchableOpacity>
+          ))}
         </View>
       </View>
 
-      {/* Transações recentes */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Transações Recentes</Text>
-        <View style={styles.transactionCard}>
-          <Text style={styles.emptyText}>
-            Nenhuma transação ainda
-          </Text>
-          <TouchableOpacity 
-            style={styles.viewAllButton}
-            onPress={() => navigation.navigate('Transactions')}
-          >
-            <Text style={styles.viewAllText}>Ver todas</Text>
+        <View style={styles.recentHeader}>
+          <Text style={styles.sectionTitle}>Movimentações recentes</Text>
+          <TouchableOpacity onPress={() => navigation.navigate('Transactions')}>
+            <Text style={styles.viewAllLink}>Ver extrato</Text>
           </TouchableOpacity>
         </View>
+
+        {recentTransactions.length === 0 ? (
+          <View style={styles.transactionCard}>
+            <Text style={styles.emptyText}>
+              Consulte o extrato para acompanhar cada transação realizada.
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.transactionCard}>
+            {recentTransactions.map(renderTransactionRow)}
+          </View>
+        )}
       </View>
     </ScrollView>
   );
@@ -199,15 +288,16 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.BG_SCREEN,
   },
+  scrollContent: {
+    paddingHorizontal: SPACING.LG,
+    paddingBottom: SPACING['2XL'],
+    paddingTop: SPACING.LG,
+    rowGap: SPACING.LG,
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: SPACING.LG,
-    paddingTop: 60,
-    backgroundColor: COLORS.BG_CARD,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.DIVIDER,
   },
   greeting: {
     fontSize: FONT_SIZES.SM,
@@ -219,16 +309,20 @@ const styles = StyleSheet.create({
     color: COLORS.TEXT_PRIMARY,
   },
   logoutButton: {
-    padding: SPACING.SM,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.SM,
+    paddingVertical: SPACING.XS,
+    borderRadius: COMPONENTS.INPUT_RADIUS,
   },
   logoutText: {
     color: COLORS.ERROR,
     fontSize: FONT_SIZES.SM,
     fontWeight: '500',
+    marginLeft: SPACING.XS,
   },
   balanceCard: {
     backgroundColor: COLORS.PRIMARY,
-    margin: SPACING.LG,
     padding: SPACING.LG,
     borderRadius: COMPONENTS.CARD_RADIUS,
     ...COMPONENTS.CARD_SHADOW,
@@ -237,7 +331,6 @@ const styles = StyleSheet.create({
     color: COLORS.PRIMARY_CONTRAST,
     fontSize: FONT_SIZES.SM,
     marginBottom: SPACING.SM,
-    opacity: 0.9,
   },
   balanceValue: {
     color: COLORS.PRIMARY_CONTRAST,
@@ -273,8 +366,6 @@ const styles = StyleSheet.create({
   },
   poolCard: {
     backgroundColor: COLORS.BG_CARD,
-    marginHorizontal: SPACING.LG,
-    marginBottom: SPACING.BASE,
     padding: SPACING.LG,
     borderRadius: COMPONENTS.CARD_RADIUS,
     ...COMPONENTS.CARD_SHADOW,
@@ -304,31 +395,35 @@ const styles = StyleSheet.create({
     color: COLORS.TEXT_PRIMARY,
   },
   section: {
-    paddingHorizontal: SPACING.LG,
-    marginBottom: SPACING.LG,
+    rowGap: SPACING.BASE,
   },
   sectionTitle: {
     fontSize: FONT_SIZES.LG,
     fontWeight: '600',
     color: COLORS.TEXT_PRIMARY,
-    marginBottom: SPACING.BASE,
   },
   quickActions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: SPACING.BASE-1,
+    justifyContent: 'space-between',
+    rowGap: SPACING.BASE,
   },
   quickActionCard: {
+    flexBasis: '48%',
     backgroundColor: COLORS.BG_CARD,
-    width: '48%',
-    padding: SPACING.LG,
+    paddingVertical: SPACING.LG,
     borderRadius: COMPONENTS.CARD_RADIUS,
     alignItems: 'center',
+    gap: SPACING.SM,
     ...COMPONENTS.CARD_SHADOW,
   },
-  quickActionIcon: {
-    fontSize: 32,
-    marginBottom: SPACING.SM,
+  quickIconWrapper: {
+    width: 56,
+    height: 56,
+    borderRadius: COMPONENTS.INPUT_RADIUS,
+    backgroundColor: COLORS.BG_MUTED,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   quickActionText: {
     fontSize: FONT_SIZES.SM,
@@ -336,25 +431,81 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontWeight: '500',
   },
+  recentHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  viewAllLink: {
+    color: COLORS.PRIMARY,
+    fontSize: FONT_SIZES.SM,
+    fontWeight: '600',
+  },
   transactionCard: {
     backgroundColor: COLORS.BG_CARD,
-    padding: SPACING.LG,
     borderRadius: COMPONENTS.CARD_RADIUS,
-    alignItems: 'center',
+    padding: SPACING.BASE,
     ...COMPONENTS.CARD_SHADOW,
   },
   emptyText: {
     color: COLORS.TEXT_SECONDARY,
     fontSize: FONT_SIZES.BODY,
-    marginBottom: SPACING.BASE,
+    textAlign: 'center',
   },
-  viewAllButton: {
-    paddingVertical: SPACING.SM,
-    paddingHorizontal: SPACING.BASE,
+  transactionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SPACING.SM,
   },
-  viewAllText: {
-    color: COLORS.PRIMARY,
+  transactionIconBubble: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: COLORS.BG_MUTED,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: SPACING.BASE,
+  },
+  transactionInfo: {
+    flex: 1,
+  },
+  transactionLabel: {
     fontSize: FONT_SIZES.SM,
-    fontWeight: '500',
+    color: COLORS.TEXT_PRIMARY,
+    fontWeight: '600',
+  },
+  transactionDate: {
+    fontSize: FONT_SIZES.XS,
+    color: COLORS.TEXT_SECONDARY,
+    marginTop: 2,
+  },
+  transactionAmount: {
+    fontSize: FONT_SIZES.BODY,
+    fontWeight: '600',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.BASE,
+  },
+  notificationButton: {
+    position: 'relative',
+    padding: SPACING.SM,
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: COLORS.ERROR,
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notificationBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: COLORS.PRIMARY_CONTRAST,
   },
 });
