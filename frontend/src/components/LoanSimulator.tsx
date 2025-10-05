@@ -3,9 +3,11 @@ import Button from './Button'
 import Input from './Input'
 import Select from './Select'
 import Icon from './Icon'
+import AlertModal from './AlertModal'
 import { formatCurrency } from '../utils/format'
 import { getCreditScoreByUserId } from '../data/mockData'
 import { LoanSimulation, SimulatedPayment } from '../types/wallet'
+import { useAlert } from '../hooks/useAlert'
 
 interface LoanSimulatorProps {
   userId?: number
@@ -20,6 +22,7 @@ const LoanSimulator = ({ userId, onSimulate, onLoanRequest, className = '' }: Lo
   const [purpose, setPurpose] = useState('capital_giro')
   const [simulation, setSimulation] = useState<LoanSimulation | null>(null)
   const [isSimulating, setIsSimulating] = useState(false)
+  const { alertState, showSuccess, hideAlert } = useAlert()
 
   // Obter score de crédito do usuário se disponível
   const userCreditScore = userId ? getCreditScoreByUserId(userId) : null
@@ -167,8 +170,29 @@ const LoanSimulator = ({ userId, onSimulate, onLoanRequest, className = '' }: Lo
     if (onLoanRequest) {
       onLoanRequest(simulation)
     } else {
-      // Comportamento padrão - redirecionar ou mostrar modal
-      alert(`Solicitação de empréstimo iniciada!\nValor: ${formatCurrency(simulation.amount)}\nParcelas: ${simulation.duration_months}x de ${formatCurrency(simulation.monthly_payment)}`)
+      // Comportamento padrão - mostrar modal bonito
+      showSuccess(
+        'Solicitação Iniciada!',
+        (
+          <div className="space-y-4 text-left">
+            <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <span className="font-medium text-blue-800">Valor:</span>
+                  <p className="text-blue-900 font-bold">{formatCurrency(simulation.amount)}</p>
+                </div>
+                <div>
+                  <span className="font-medium text-blue-800">Parcelas:</span>
+                  <p className="text-blue-900 font-bold">{simulation.duration_months}x de {formatCurrency(simulation.monthly_payment)}</p>
+                </div>
+              </div>
+            </div>
+            <p className="text-center text-gray-600">
+              ✅ Sua solicitação foi processada com sucesso!
+            </p>
+          </div>
+        )
+      )
     }
   }
 
@@ -634,6 +658,19 @@ Data da Simulação: ${new Date().toLocaleDateString('pt-BR')}
           </div>
         )}
       </div>
+
+      {/* Alert Modal */}
+      <AlertModal
+        isOpen={alertState.isOpen}
+        onClose={hideAlert}
+        type={alertState.type}
+        title={alertState.title}
+        message={alertState.message}
+        confirmText={alertState.confirmText}
+        cancelText={alertState.cancelText}
+        showCancel={alertState.showCancel}
+        onConfirm={alertState.onConfirm}
+      />
     </div>
   )
 }

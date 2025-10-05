@@ -3,6 +3,8 @@ import Button from './Button'
 import Card from './Card'
 import Icon from './Icon'
 import Modal from './Modal'
+import AlertModal from './AlertModal'
+import { useAlert } from '../hooks/useAlert'
 import { formatCurrency } from '../utils/format'
 import { Distribution } from '../types/wallet'
 
@@ -16,6 +18,7 @@ const RevenueDistribution = ({ distributions, onDistribute, className = '' }: Re
   const [selectedDistribution, setSelectedDistribution] = useState<Distribution | null>(null)
   const [showDetailsModal, setShowDetailsModal] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
+  const { alertState, showSuccess, hideAlert } = useAlert()
   const [summary, setSummary] = useState({
     totalDistributed: 0,
     totalPending: 0,
@@ -109,7 +112,10 @@ const RevenueDistribution = ({ distributions, onDistribute, className = '' }: Re
     newDistribution.security_reserve = newDistribution.total_amount * 0.02
     newDistribution.investor_amount = newDistribution.total_amount * 0.93
     
-    alert(`Nova distribuição criada!\n\nID: #${newDistribution.id}\nValor Total: R$ ${newDistribution.total_amount.toLocaleString()}\nPara Investidores: R$ ${newDistribution.investor_amount.toLocaleString()}\nStatus: Pendente\n\n(Em um sistema real, seria salva no banco de dados)`)
+    showSuccess(
+      'Nova Distribuição Criada!',
+      `ID: #${newDistribution.id}\nValor Total: ${formatCurrency(newDistribution.total_amount)}\nPara Investidores: ${formatCurrency(newDistribution.investor_amount)}\nStatus: Pendente\n\n(Em um sistema real, seria salva no banco de dados)`
+    )
   }
 
   return (
@@ -359,6 +365,18 @@ const RevenueDistribution = ({ distributions, onDistribute, className = '' }: Re
           </div>
         )}
       </Modal>
+      
+      <AlertModal
+        isOpen={alertState.isOpen}
+        type={alertState.type}
+        title={alertState.title}
+        message={alertState.message}
+        onClose={hideAlert}
+        onConfirm={alertState.onConfirm}
+        confirmText={alertState.confirmText}
+        cancelText={alertState.cancelText}
+        showCancel={alertState.showCancel}
+      />
     </>
   )
 }

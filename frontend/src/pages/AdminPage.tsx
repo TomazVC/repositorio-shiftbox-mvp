@@ -2,11 +2,13 @@ import { useState } from 'react'
 import Button from '../components/Button'
 import Icon from '../components/Icon'
 import Card from '../components/Card'
+import AlertModal from '../components/AlertModal'
 import RevenueDistribution from '../components/RevenueDistribution'
 import FraudDetection from '../components/FraudDetection'
 import LoanApprovalWorkflow from '../components/LoanApprovalWorkflow'
 import { getDistributions, mockLoanApplications } from '../data/mockData'
 import { formatCurrency } from '../utils/format'
+import { useAlert } from '../hooks/useAlert'
 
 const AdminPage = () => {
   const [activeTab, setActiveTab] = useState('dashboard')
@@ -14,6 +16,7 @@ const AdminPage = () => {
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [sortBy, setSortBy] = useState('date')
+  const { alertState, showSuccess, showInfo, showConfirm, hideAlert } = useAlert()
 
   const tabs = [
     {
@@ -71,16 +74,33 @@ const AdminPage = () => {
   // Ações em lote
   const handleBulkAction = (action: string) => {
     if (selectedApplications.length === 0) {
-      alert('Selecione pelo menos uma solicitação')
+      showInfo('Seleção Necessária', 'Selecione pelo menos uma solicitação para continuar')
       return
     }
     
     const actionText = action === 'approve' ? 'aprovar' : 'rejeitar'
-    if (confirm(`Deseja ${actionText} ${selectedApplications.length} solicitações selecionadas?`)) {
-      console.log(`Ação em lote: ${action}`, selectedApplications)
-      setSelectedApplications([])
-      alert(`${selectedApplications.length} solicitações ${actionText === 'aprovar' ? 'aprovadas' : 'rejeitadas'} com sucesso!`)
-    }
+    showConfirm({
+      title: `Confirmar Ação em Lote`,
+      message: (
+        <div className="space-y-3">
+          <p>Deseja <strong>{actionText}</strong> as <strong>{selectedApplications.length}</strong> solicitações selecionadas?</p>
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+            <p className="text-sm text-amber-800">
+              <strong>Atenção:</strong> Esta ação não pode ser desfeita.
+            </p>
+          </div>
+        </div>
+      ),
+      confirmText: actionText === 'aprovar' ? 'Aprovar Todas' : 'Rejeitar Todas',
+      onConfirm: () => {
+        console.log(`Ação em lote: ${action}`, selectedApplications)
+        setSelectedApplications([])
+        showSuccess(
+          'Ação Concluída',
+          `${selectedApplications.length} solicitações ${actionText === 'aprovar' ? 'aprovadas' : 'rejeitadas'} com sucesso!`
+        )
+      }
+    })
   }
 
   const handleDistributionProcess = (distributionId: number) => {
@@ -121,15 +141,72 @@ Total Pendente: R$ ${distributions.filter(d => d.status === 'pending').reduce((s
     document.body.removeChild(link)
     window.URL.revokeObjectURL(url)
     
-    alert('Relatório exportado com sucesso!')
+    showSuccess(
+      'Relatório Exportado',
+      'O relatório administrativo foi baixado com sucesso!'
+    )
   }
 
   const handleShowSettings = () => {
-    alert('Configurações do Sistema:\n\n• Taxa da Plataforma: 5%\n• Reserva de Segurança: 2%\n• Limite de Empréstimo: R$ 100.000\n• Taxa de Juros Base: 2.5% a.m.\n\n(Funcionalidade em desenvolvimento)')
+    showInfo(
+      'Configurações do Sistema',
+      (
+        <div className="space-y-4 text-left">
+          <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+            <div className="flex justify-between">
+              <span className="font-medium">Taxa da Plataforma:</span>
+              <span className="text-blue-600 font-semibold">5%</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="font-medium">Reserva de Segurança:</span>
+              <span className="text-blue-600 font-semibold">2%</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="font-medium">Limite de Empréstimo:</span>
+              <span className="text-blue-600 font-semibold">R$ 100.000</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="font-medium">Taxa de Juros Base:</span>
+              <span className="text-blue-600 font-semibold">2.5% a.m.</span>
+            </div>
+          </div>
+          <p className="text-sm text-gray-600 text-center">
+            🛠️ Funcionalidade completa em desenvolvimento
+          </p>
+        </div>
+      )
+    )
   }
 
   const handleShowNotifications = () => {
-    alert('Notificações Recentes:\n\n🔔 3 novas solicitações de empréstimo\n🔔 2 distribuições pendentes\n🔔 1 evento de segurança para investigar\n🔔 Sistema funcionando normalmente\n\n(Central de notificações em desenvolvimento)')
+    showInfo(
+      'Notificações Recentes',
+      (
+        <div className="space-y-4 text-left">
+          <div className="space-y-3">
+            <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+              <span className="text-xl">🔔</span>
+              <span className="text-blue-800">3 novas solicitações de empréstimo</span>
+            </div>
+            <div className="flex items-center gap-3 p-3 bg-amber-50 rounded-lg border border-amber-200">
+              <span className="text-xl">🔔</span>
+              <span className="text-amber-800">2 distribuições pendentes</span>
+            </div>
+            <div className="flex items-center gap-3 p-3 bg-red-50 rounded-lg border border-red-200">
+              <span className="text-xl">🔔</span>
+              <span className="text-red-800">1 evento de segurança para investigar</span>
+            </div>
+            <div className="flex items-center gap-3 p-3 bg-green-50 rounded-lg border border-green-200">
+              <span className="text-xl">🔔</span>
+              <span className="text-green-800">Sistema funcionando normalmente</span>
+            </div>
+          </div>
+          <p className="text-sm text-gray-600 text-center">
+            📱 Central de notificações em desenvolvimento
+          </p>
+        </div>
+      )
+    )
   }
 
   return (
@@ -428,6 +505,19 @@ Total Pendente: R$ ${distributions.filter(d => d.status === 'pending').reduce((s
           )}
         </div>
       </div>
+
+      {/* Alert Modal */}
+      <AlertModal
+        isOpen={alertState.isOpen}
+        onClose={hideAlert}
+        type={alertState.type}
+        title={alertState.title}
+        message={alertState.message}
+        confirmText={alertState.confirmText}
+        cancelText={alertState.cancelText}
+        showCancel={alertState.showCancel}
+        onConfirm={alertState.onConfirm}
+      />
     </div>
   )
 }

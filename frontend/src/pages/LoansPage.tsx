@@ -2,12 +2,14 @@ import { useState, useEffect } from 'react'
 import Button from '../components/Button'
 import Card from '../components/Card'
 import Icon from '../components/Icon'
+import AlertModal from '../components/AlertModal'
 import LoanSimulator from '../components/LoanSimulator'
 import LoanApprovalWorkflow from '../components/LoanApprovalWorkflow'
 import RepaymentSchedule from '../components/RepaymentSchedule'
 import { formatCurrency } from '../utils/format'
 import { getLoanApplicationsByUserId, mockLoanApplications } from '../data/mockData'
 import { LoanApplication, LoanSimulation, PaymentSchedule } from '../types/wallet'
+import { useAlert } from '../hooks/useAlert'
 
 interface LoansPageProps {
   currentUserId?: number
@@ -80,6 +82,7 @@ const LoansPage = ({ currentUserId = 1, isAdmin = false }: LoansPageProps) => {
     applicationId: number
     amount: number
   } | null>(null)
+  const { alertState, showSuccess, showInfo, hideAlert } = useAlert()
 
   const showSuccessNotification = (applicationId: number, amount: number) => {
     setNotificationData({
@@ -181,9 +184,15 @@ const LoansPage = ({ currentUserId = 1, isAdmin = false }: LoansPageProps) => {
     loadUserApplications()
     
     if (approved) {
-      alert('Empréstimo aprovado com sucesso!')
+      showSuccess(
+        'Empréstimo Aprovado!',
+        'A solicitação foi aprovada com sucesso e o valor será liberado em breve.'
+      )
     } else {
-      alert('Empréstimo foi rejeitado.')
+      showInfo(
+        'Empréstimo Rejeitado',
+        'A solicitação foi rejeitada após análise administrativa.'
+      )
     }
   }
 
@@ -742,6 +751,19 @@ const LoansPage = ({ currentUserId = 1, isAdmin = false }: LoansPageProps) => {
           </div>
         </div>
       )}
+
+      {/* Alert Modal */}
+      <AlertModal
+        isOpen={alertState.isOpen}
+        onClose={hideAlert}
+        type={alertState.type}
+        title={alertState.title}
+        message={alertState.message}
+        confirmText={alertState.confirmText}
+        cancelText={alertState.cancelText}
+        showCancel={alertState.showCancel}
+        onConfirm={alertState.onConfirm}
+      />
     </div>
   )
 }
