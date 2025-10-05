@@ -12,7 +12,9 @@ import Input from '../components/Input'
 import ErrorBoundary, { ApiErrorFallback } from '../components/ErrorBoundary'
 import { TableSkeleton } from '../components/Skeletons'
 import FileUpload from '../components/FileUpload'
-import { User, mockUsers } from '../data/mockData'
+import CreditScoreCard from '../components/CreditScoreCard'
+import ScoreHistoryChart from '../components/ScoreHistoryChart'
+import { User, mockUsers, getCreditScoreByUserId, getScoreHistoryByUserId } from '../data/mockData'
 import Icon from '../components/Icon'
 
 function UsersContent() {
@@ -22,6 +24,7 @@ function UsersContent() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [uploadingUserId, setUploadingUserId] = useState<number | null>(null)
   const [selectedUserForHash, setSelectedUserForHash] = useState<User | null>(null)
+  const [selectedUserForScore, setSelectedUserForScore] = useState<User | null>(null)
   
   const { toasts, removeToast, success, error, loading: toastLoading } = useToast()
   const { execute: executeCreate, isLoading: createLoading } = useAsyncOperation<User>()
@@ -258,6 +261,44 @@ function UsersContent() {
                 Cancelar
               </Button>
             </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Modal de Score de Crédito */}
+      {selectedUserForScore && (
+        <Modal
+          isOpen={!!selectedUserForScore}
+          onClose={() => setSelectedUserForScore(null)}
+          title={`Score de Crédito - ${selectedUserForScore.name}`}
+          size="lg"
+        >
+          <div className="space-y-6">
+            {(() => {
+              const creditScore = getCreditScoreByUserId(selectedUserForScore.id)
+              const scoreHistory = getScoreHistoryByUserId(selectedUserForScore.id)
+              
+              if (!creditScore) {
+                return (
+                  <div className="text-center py-8">
+                    <Icon name="info" className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">Score não disponível</h3>
+                    <p className="text-gray-600">
+                      O score de crédito para este usuário ainda não foi calculado.
+                    </p>
+                  </div>
+                )
+              }
+
+              return (
+                <div className="space-y-6">
+                  <CreditScoreCard creditScore={creditScore} />
+                  {scoreHistory.length > 0 && (
+                    <ScoreHistoryChart history={scoreHistory} />
+                  )}
+                </div>
+              )
+            })()}
           </div>
         </Modal>
       )}
@@ -501,14 +542,24 @@ function UsersContent() {
                   {new Date(user.created_at).toLocaleDateString('pt-BR')}
                 </td>
                 <td>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setSelectedUserForHash(user)}
-                  >
-                    <Icon name="eye" size={14} />
-                    Ver Hash
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSelectedUserForHash(user)}
+                    >
+                      <Icon name="eye" size={14} />
+                      Ver Hash
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSelectedUserForScore(user)}
+                    >
+                      <Icon name="shield" size={14} />
+                      Score
+                    </Button>
+                  </div>
                 </td>
                 <td>
                   <div className="flex gap-2">
