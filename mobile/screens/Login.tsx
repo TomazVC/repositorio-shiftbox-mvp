@@ -38,7 +38,7 @@ export default function Login({ navigation }: Props) {
 
     try {
       await authService.login({ email, password });
-      navigation.replace('Dashboard');
+      navigation.replace('MainTabs');
     } catch (error: any) {
       setErrorMessage(error.message || 'Não foi possível fazer o login.');
     } finally {

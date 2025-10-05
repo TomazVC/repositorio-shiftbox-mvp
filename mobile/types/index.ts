@@ -1,11 +1,22 @@
 ﻿export type RootStackParamList = {
   Login: undefined;
   Register: undefined;
+  MainTabs: undefined;
   Dashboard: undefined;
+  CreditScore: undefined;
   Invest: undefined;
   LoanRequest: undefined;
   Transactions: undefined;
   Withdraw: undefined;
+  InvestmentDetails: undefined;
+  Notifications: undefined;
+};
+
+export type TabParamList = {
+  Dashboard: undefined;
+  CreditScore: undefined;
+  Invest: undefined;
+  Transactions: undefined;
 };
 
 export interface ApiResponse<T = any> {
@@ -87,4 +98,60 @@ export interface PoolStatus {
   saldo_emprestado: number;
   percentual_utilizacao: number;
   total_investidores: number;
+}
+
+export interface ScoreHistoryItem {
+  date: string;
+  score: number;
+  change: number;
+}
+
+export interface ScoreFactors {
+  payment_history: number;
+  credit_utilization: number;
+  account_age: number;
+  transaction_volume: number;
+  risk_events: number;
+}
+
+export interface CreditScoreData {
+  score: number;
+  classification: string;
+  factors: ScoreFactors;
+  history: ScoreHistoryItem[];
+}
+
+export interface InvestmentDetailed {
+  id: string;
+  amount: number;
+  shares: number;
+  investment_date: string;
+  status: 'ACTIVE' | 'REDEEMED' | 'PENDING';
+}
+
+export interface EarningsHistory {
+  date: string;
+  amount: number;
+  type: 'INTEREST' | 'BONUS' | 'FEE_REFUND';
+}
+
+export interface Projection {
+  period: '1M' | '3M' | '6M' | '1Y';
+  estimated_return: number;
+  total_amount: number;
+}
+
+export type NotificationType = 'PAYMENT' | 'INVESTMENT' | 'LOAN' | 'SCORE' | 'SYSTEM' | 'SECURITY';
+
+export interface NotificationData {
+  id: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  timestamp: string;
+  read: boolean;
+  action?: {
+    label: string;
+    route: keyof RootStackParamList;
+  };
 }

@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+﻿import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -28,15 +28,53 @@ type Props = {
   navigation: LoanRequestScreenNavigationProp;
 };
 
+type FeedbackState = {
+  type: 'success' | 'error';
+  message: string;
+};
+
+type LoanSummary = {
+  valid: boolean;
+  amount: number;
+  installmentCount: number;
+  monthlyPayment: number;
+  totalInterest: number;
+  platformFee: number;
+  reserveContribution: number;
+  totalWithFees: number;
+};
+
+const INTEREST_RATE = 0.15; // 15% ao ano
+const PLATFORM_FEE_RATE = 0.02; // 2% taxa da plataforma
+const RESERVE_FEE_RATE = 0.01; // 1% para fundo de segurança
+
+const initialSummary: LoanSummary = {
+  valid: false,
+  amount: 0,
+  installmentCount: 0,
+  monthlyPayment: 0,
+  totalInterest: 0,
+  platformFee: 0,
+  reserveContribution: 0,
+  totalWithFees: 0,
+};
+
 export default function LoanRequestScreen({ navigation }: Props) {
   const [amount, setAmount] = useState('');
   const [installments, setInstallments] = useState('12');
   const [loading, setLoading] = useState(false);
   const [poolStatus, setPoolStatus] = useState<PoolStatus | null>(null);
   const [userId, setUserId] = useState<number | null>(null);
+  const [feedback, setFeedback] = useState<FeedbackState | null>(null);
+  const redirectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     loadContext();
+    return () => {
+      if (redirectTimeoutRef.current) {
+        clearTimeout(redirectTimeoutRef.current);
+      }
+    };
   }, []);
 
   const loadContext = async () => {
@@ -61,37 +99,81 @@ export default function LoanRequestScreen({ navigation }: Props) {
       currency: 'BRL',
     }).format(value);
 
-  const handleLoanRequest = async () => {
+  const loanSummary = useMemo<LoanSummary>(() => {
     const loanAmount = Number.parseFloat(amount.replace(',', '.'));
     const installmentCount = Number.parseInt(installments, 10);
 
+    if (
+      Number.isNaN(loanAmount) ||
+      loanAmount <= 0 ||
+      Number.isNaN(installmentCount) ||
+      installmentCount <= 0
+    ) {
+      return initialSummary;
+    }
+
+    const monthlyRate = INTEREST_RATE / 12;
+    const factor = Math.pow(1 + monthlyRate, installmentCount);
+    const monthlyPayment =
+      monthlyRate === 0
+        ? loanAmount / installmentCount
+        : loanAmount * ((monthlyRate * factor) / (factor - 1));
+
+    const totalInterest = monthlyPayment * installmentCount - loanAmount;
+    const platformFee = loanAmount * PLATFORM_FEE_RATE;
+    const reserveContribution = loanAmount * RESERVE_FEE_RATE;
+    const totalWithFees = loanAmount + totalInterest + platformFee + reserveContribution;
+
+    return {
+      valid: true,
+      amount: loanAmount,
+      installmentCount,
+      monthlyPayment,
+      totalInterest,
+      platformFee,
+      reserveContribution,
+      totalWithFees,
+    };
+  }, [amount, installments]);
+
+  const handleLoanRequest = async () => {
+    const loanAmount = Number.parseFloat(amount.replace(',', '.'));
+    const installmentCount = Number.parseInt(installments, 10);
+    setFeedback(null);
+
     if (!amount || Number.isNaN(loanAmount) || loanAmount <= 0) {
-      Alert.alert('Erro', 'Informe um valor válido.');
+      setFeedback({ type: 'error', message: 'Informe um valor válido.' });
       return;
     }
 
     if (loanAmount < CURRENCY.MIN_LOAN) {
-      Alert.alert('Erro', `Valor mínimo: ${formatCurrency(CURRENCY.MIN_LOAN)}.`);
+      setFeedback({
+        type: 'error',
+        message: `Valor mínimo: ${formatCurrency(CURRENCY.MIN_LOAN)}.`,
+      });
       return;
     }
 
     if (loanAmount > CURRENCY.MAX_LOAN) {
-      Alert.alert('Erro', `Valor máximo: ${formatCurrency(CURRENCY.MAX_LOAN)}.`);
+      setFeedback({
+        type: 'error',
+        message: `Valor máximo: ${formatCurrency(CURRENCY.MAX_LOAN)}.`,
+      });
       return;
     }
 
     if (Number.isNaN(installmentCount) || installmentCount < 6 || installmentCount > 60) {
-      Alert.alert('Erro', 'Escolha entre 6 e 60 parcelas.');
+      setFeedback({ type: 'error', message: 'Escolha entre 6 e 60 parcelas.' });
       return;
     }
 
     if (poolStatus && loanAmount > poolStatus.saldo_disponivel) {
-      Alert.alert('Erro', 'Valor acima do saldo disponível no pool.');
+      setFeedback({ type: 'error', message: 'Valor acima do saldo disponível no pool.' });
       return;
     }
 
     if (!userId) {
-      Alert.alert('Erro', 'Não foi possível identificar o usuário.');
+      setFeedback({ type: 'error', message: 'Não foi possível identificar o usuário.' });
       return;
     }
 
@@ -104,21 +186,27 @@ export default function LoanRequestScreen({ navigation }: Props) {
       });
 
       const approved = await loanService.approveLoan(loan.id);
-
-      // Recarrega contexto para refletir o novo saldo
       const wallet = await walletService.getWalletByUser(userId);
       setPoolStatus(await poolService.getPoolStatus());
 
-      Alert.alert(
-        'Sucesso',
-        `Empréstimo de ${formatCurrency(approved.valor)} aprovado automaticamente. Seu novo saldo é ${formatCurrency(wallet.saldo)}.`,
-        [{
-          text: 'Ir para dashboard',
-          onPress: () => navigation.navigate('Dashboard'),
-        }]
-      );
+      const snapshot = loanSummary.valid ? loanSummary : { ...initialSummary, amount: loanAmount, installmentCount };
+
+      setFeedback({
+        type: 'success',
+        message: `Empréstimo de ${formatCurrency(approved.valor)} aprovado. Parcela estimada de ${formatCurrency(
+          snapshot.monthlyPayment || approved.valor / installmentCount
+        )}. Saldo disponível atualizado: ${formatCurrency(wallet.saldo)}.`,
+      });
+
+      redirectTimeoutRef.current = setTimeout(() => {
+        setAmount('');
+        navigation.navigate('Dashboard');
+      }, 1500);
     } catch (error: any) {
-      Alert.alert('Erro', error.message || 'Não foi possível registrar o pedido.');
+      setFeedback({
+        type: 'error',
+        message: error.message || 'Não foi possível registrar o pedido.',
+      });
     } finally {
       setLoading(false);
     }
@@ -126,10 +214,6 @@ export default function LoanRequestScreen({ navigation }: Props) {
 
   const suggestedAmounts = [1000, 5000, 10000, 25000];
   const installmentOptions = [6, 12, 24, 36, 48, 60];
-
-  const monthlyPayment = amount && installments
-    ? Number.parseFloat(amount) / Number.parseInt(installments, 10)
-    : 0;
 
   return (
     <KeyboardAvoidingView
@@ -152,90 +236,141 @@ export default function LoanRequestScreen({ navigation }: Props) {
         <View style={styles.content}>
           {poolStatus && (
             <View style={styles.poolCard}>
-              <Text style={styles.poolTitle}>Pool em tempo real</Text>
+              <Text style={styles.poolTitle}>Disponibilidade do pool</Text>
               <View style={styles.poolInfo}>
                 <View style={styles.poolItem}>
                   <Text style={styles.poolLabel}>Disponível</Text>
                   <Text style={styles.poolValue}>{formatCurrency(poolStatus.saldo_disponivel)}</Text>
                 </View>
                 <View style={styles.poolItem}>
-                  <Text style={styles.poolLabel}>Utilização</Text>
-                  <Text style={styles.poolValue}>{poolStatus.percentual_utilizacao}%</Text>
+                  <Text style={styles.poolLabel}>Total comprometido</Text>
+                  <Text style={styles.poolValue}>{formatCurrency(poolStatus.saldo_total - poolStatus.saldo_disponivel)}</Text>
                 </View>
                 <View style={styles.poolItem}>
-                  <Text style={styles.poolLabel}>Investidores</Text>
-                  <Text style={styles.poolValue}>{poolStatus.total_investidores}</Text>
+                  <Text style={styles.poolLabel}>Utilização</Text>
+                  <Text style={styles.poolValue}>{poolStatus.percentual_utilizacao.toFixed(1)}%</Text>
                 </View>
               </View>
             </View>
           )}
 
           <View style={styles.form}>
-            <Text style={styles.formTitle}>Valor solicitado</Text>
-            <View style={styles.inputContainer}>
-              <Text style={styles.currencySymbol}>{CURRENCY.SYMBOL}</Text>
-              <TextInput
-                style={styles.amountInput}
-                value={amount}
-                onChangeText={setAmount}
-                placeholder="0,00"
-                placeholderTextColor={COLORS.PLACEHOLDER}
-                keyboardType="decimal-pad"
-              />
-            </View>
+            <Text style={styles.formTitle}>Preencha os dados do empréstimo</Text>
 
-            <View style={styles.suggestedContainer}>
-              <Text style={styles.suggestedLabel}>Sugestões rápidas</Text>
-              <View style={styles.suggestedButtonsRow}>
-                {suggestedAmounts.map((value) => (
-                  <TouchableOpacity
-                    key={value}
-                    style={styles.suggestedButton}
-                    onPress={() => setAmount(String(value))}
-                  >
-                    <Text style={styles.suggestedButtonText}>{formatCurrency(value)}</Text>
-                  </TouchableOpacity>
-                ))}
+            {feedback && (
+              <View
+                style={[
+                  styles.feedbackContainer,
+                  feedback.type === 'success'
+                    ? styles.feedbackSuccess
+                    : styles.feedbackError,
+                ]}
+              >
+                <MaterialCommunityIcons
+                  name={feedback.type === 'success' ? 'check-circle' : 'alert-circle'}
+                  size={20}
+                  color={COLORS.PRIMARY_CONTRAST}
+                />
+                <Text style={styles.feedbackText}>{feedback.message}</Text>
+              </View>
+            )}
+
+            <View>
+              <Text style={styles.label}>Valor desejado</Text>
+              <View style={styles.inputContainer}>
+                <Text style={styles.currencySymbol}>{CURRENCY.SYMBOL}</Text>
+                <TextInput
+                  style={styles.amountInput}
+                  placeholder="0,00"
+                  placeholderTextColor={COLORS.PLACEHOLDER}
+                  keyboardType="numeric"
+                  value={amount}
+                  onChangeText={setAmount}
+                />
+              </View>
+              <View style={styles.suggestedContainer}>
+                <Text style={styles.suggestedLabel}>Sugestões rápidas</Text>
+                <View style={styles.suggestedButtonsRow}>
+                  {suggestedAmounts.map((value) => (
+                    <TouchableOpacity
+                      key={value}
+                      style={styles.suggestedButton}
+                      onPress={() => setAmount(String(value))}
+                    >
+                      <Text style={styles.suggestedButtonText}>
+                        {formatCurrency(value).replace(/\u00a0/g, ' ')}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               </View>
             </View>
 
-            <Text style={styles.label}>Parcelas</Text>
-            <View style={styles.installmentButtonsRow}>
-              {installmentOptions.map((option) => {
-                const isActive = installments === String(option);
-                return (
-                  <TouchableOpacity
-                    key={option}
-                    style={[styles.installmentButton, isActive && styles.installmentButtonActive]}
-                    onPress={() => setInstallments(String(option))}
-                  >
-                    <Text
+            <View>
+              <Text style={styles.label}>Parcelas</Text>
+              <View style={styles.installmentButtonsRow}>
+                {installmentOptions.map((option) => {
+                  const isActive = installments === option.toString();
+                  return (
+                    <TouchableOpacity
+                      key={option}
                       style={[
-                        styles.installmentButtonText,
-                        isActive && styles.installmentButtonTextActive,
+                        styles.installmentButton,
+                        isActive && styles.installmentButtonActive,
                       ]}
+                      onPress={() => setInstallments(option.toString())}
                     >
-                      {option}x
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
+                      <Text
+                        style={[
+                          styles.installmentButtonText,
+                          isActive && styles.installmentButtonTextActive,
+                        ]}
+                      >
+                        {option}x
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             </View>
 
             <View style={styles.summaryCard}>
-              <Text style={styles.summaryTitle}>Resumo</Text>
+              <Text style={styles.summaryTitle}>Simulação detalhada</Text>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Valor solicitado</Text>
-                <Text style={styles.summaryValue}>{amount ? formatCurrency(Number(amount)) : '-'}</Text>
-              </View>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Parcelas</Text>
-                <Text style={styles.summaryValue}>{installments}x</Text>
-              </View>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Estimativa parcela</Text>
                 <Text style={styles.summaryValue}>
-                  {monthlyPayment ? formatCurrency(monthlyPayment) : '-'}
+                  {loanSummary.valid ? formatCurrency(loanSummary.amount) : '-'}
+                </Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Juros estimados (15% a.a.)</Text>
+                <Text style={styles.summaryValue}>
+                  {loanSummary.valid ? formatCurrency(loanSummary.totalInterest) : '-'}
+                </Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Taxa da plataforma (2%)</Text>
+                <Text style={styles.summaryValue}>
+                  {loanSummary.valid ? formatCurrency(loanSummary.platformFee) : '-'}
+                </Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Reserva de segurança (1%)</Text>
+                <Text style={styles.summaryValue}>
+                  {loanSummary.valid ? formatCurrency(loanSummary.reserveContribution) : '-'}
+                </Text>
+              </View>
+              <View style={styles.summaryDivider} />
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Total a devolver</Text>
+                <Text style={styles.summaryValue}>
+                  {loanSummary.valid ? formatCurrency(loanSummary.totalWithFees) : '-'}
+                </Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Parcela estimada</Text>
+                <Text style={styles.summaryValue}>
+                  {loanSummary.valid ? formatCurrency(loanSummary.monthlyPayment) : '-'}
                 </Text>
               </View>
             </View>
@@ -245,7 +380,9 @@ export default function LoanRequestScreen({ navigation }: Props) {
               onPress={handleLoanRequest}
               disabled={loading}
             >
-              <Text style={styles.buttonText}>{loading ? 'Enviando...' : 'Solicitar empréstimo'}</Text>
+              <Text style={styles.buttonText}>
+                {loading ? 'Processando...' : 'Solicitar empréstimo agora'}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -337,6 +474,30 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.TEXT_PRIMARY,
   },
+  feedbackContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.XS,
+    padding: SPACING.SM,
+    borderRadius: COMPONENTS.INPUT_RADIUS,
+  },
+  feedbackSuccess: {
+    backgroundColor: COLORS.SUCCESS,
+  },
+  feedbackError: {
+    backgroundColor: COLORS.ERROR,
+  },
+  feedbackText: {
+    color: COLORS.PRIMARY_CONTRAST,
+    fontSize: FONT_SIZES.SM,
+    flex: 1,
+    fontWeight: '500',
+  },
+  label: {
+    fontSize: FONT_SIZES.SM,
+    fontWeight: '600',
+    color: COLORS.TEXT_PRIMARY,
+  },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -383,11 +544,6 @@ const styles = StyleSheet.create({
     color: COLORS.TEXT_PRIMARY,
     fontWeight: '500',
   },
-  label: {
-    fontSize: FONT_SIZES.SM,
-    fontWeight: '600',
-    color: COLORS.TEXT_PRIMARY,
-  },
   installmentButtonsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -417,17 +573,17 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.BG_MUTED,
     borderRadius: COMPONENTS.INPUT_RADIUS,
     padding: SPACING.BASE,
+    gap: SPACING.XS,
   },
   summaryTitle: {
     fontSize: FONT_SIZES.SM,
     fontWeight: '600',
     color: COLORS.TEXT_PRIMARY,
-    marginBottom: SPACING.SM,
   },
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: SPACING.XS,
+    alignItems: 'center',
   },
   summaryLabel: {
     fontSize: FONT_SIZES.SM,
@@ -437,6 +593,11 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.SM,
     fontWeight: '600',
     color: COLORS.TEXT_PRIMARY,
+  },
+  summaryDivider: {
+    height: 1,
+    backgroundColor: COLORS.DIVIDER,
+    marginVertical: SPACING.XS,
   },
   button: {
     backgroundColor: COLORS.PRIMARY,
