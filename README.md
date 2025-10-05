@@ -66,6 +66,7 @@ npm run dev
 cd mobile
 npm install
 npx expo start
+
 ```
 
 ###  URLs de Acesso
