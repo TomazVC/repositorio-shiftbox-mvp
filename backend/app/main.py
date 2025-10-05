@@ -21,13 +21,15 @@ app = FastAPI(
     version="0.1.0"
 )
 
-# Configurar CORS
+# Configurar CORS - permitir todas as origens para desenvolvimento
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Em producao, especificar dominios
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"],
     allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=3600  # Cache preflight por 1 hora
 )
 
 # Incluir rotas
@@ -52,5 +54,10 @@ def read_root():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy"}
+    return {"status": "healthy", "cors_enabled": True}
+
+
+@app.options("/{path:path}")
+def options_handler(path: str):
+    return {"message": "CORS preflight"}
 

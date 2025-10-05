@@ -25,7 +25,7 @@ const shared: Pick<Environment, "APP_VERSION" | "TIMEOUT"> = {
 };
 
 const development: Environment = {
-  API_URL: resolveApiUrl("http://localhost:8000"),
+  API_URL: resolveApiUrl("http://192.168.17.72:8000"),
   APP_VERSION: shared.APP_VERSION,
   ENVIRONMENT: "development",
   TIMEOUT: shared.TIMEOUT,

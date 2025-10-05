@@ -19,7 +19,7 @@ class UserBase(BaseModel):
     full_name: str = Field(max_length=255)
     cpf: str = Field(min_length=11, max_length=14)
     date_of_birth: date
-    profile_image_base64: str
+    profile_image_base64: Optional[str] = None
 
     @field_validator("cpf")
     @classmethod
@@ -31,12 +31,15 @@ class UserBase(BaseModel):
 
     @field_validator("profile_image_base64")
     @classmethod
-    def validate_base64(cls, value: str) -> str:
+    def validate_base64(cls, value: Optional[str]) -> Optional[str]:
+        if value is None or value == "":
+            return value
         return _validate_base64(value)
 
 
 class UserCreate(UserBase):
     password: str = Field(min_length=6, max_length=128)
+    profile_image_base64: Optional[str] = None
     kyc_status: Optional[str] = Field(default="pendente", max_length=50)
     credit_score: Optional[int] = Field(default=500, ge=0, le=1000)
     is_admin: Optional[bool] = False
