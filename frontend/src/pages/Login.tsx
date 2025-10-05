@@ -43,8 +43,12 @@ export default function Login() {
       } else if (err.response?.data) {
         const errorData = err.response.data
         
+        // Para erros de autenticação (401 ou 403), usar mensagem específica
+        if (err.response.status === 401 || err.response.status === 403) {
+          errorMessage = 'Email ou senha incorretos'
+        }
         // Se for um array de erros de validação (422)
-        if (Array.isArray(errorData.detail)) {
+        else if (Array.isArray(errorData.detail)) {
           errorMessage = errorData.detail.map((e: any) => e.msg).join(', ')
         }
         // Se for uma string simples
@@ -57,7 +61,7 @@ export default function Login() {
         }
         // Fallback para status 422
         else if (err.response.status === 422) {
-          errorMessage = 'Dados inválidos. Verifique email e senha.'
+          errorMessage = 'Email ou senha incorretos'
         }
       }
       
@@ -90,7 +94,7 @@ export default function Login() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-                placeholder="seu@email.com"
+                placeholder="admin@shiftbox.com"
                 required
               />
             </div>
@@ -110,7 +114,7 @@ export default function Login() {
             </div>
 
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-600 p-3 rounded-lg text-sm">
+              <div className="text-red-500 text-sm">
                 {error}
                 {error.includes('conectar com o servidor') && (
                   <div className="mt-2">
