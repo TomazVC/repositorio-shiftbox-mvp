@@ -1,71 +1,68 @@
-import { apiService, ApiError } from './api';
+﻿import { apiService, ApiError } from './api';
+import { Loan } from '../types';
 
-// Interfaces para empréstimos
-export interface LoanRequest {
+type LoanRequestPayload = {
+  userId: number;
   amount: number;
   installments: number;
-  purpose: string;
-}
+};
 
-export interface Loan {
-  id: number;
-  user_id: number;
-  amount: number;
-  installments: number;
-  status: 'pending' | 'approved' | 'rejected' | 'paid';
-  purpose: string;
-  created_at: string;
-  updated_at: string;
-}
+type LoanRequestResponse = Loan;
+
+type LoanListParams = {
+  userId?: number;
+};
 
 class LoanService {
-  // Solicitar empréstimo
-  async requestLoan(data: LoanRequest): Promise<{ message: string; loan_id: number }> {
+  async requestLoan({ userId, amount, installments }: LoanRequestPayload): Promise<LoanRequestResponse> {
     try {
-      const response = await apiService.post('/loans/request', data);
-      return response;
+      const payload = {
+        user_id: userId,
+        valor: amount,
+        valor_pago: 0,
+        taxa_juros: 0.15,
+        prazo_meses: installments,
+        status: 'pendente',
+      };
+
+      return await apiService.post<Loan>('/loans', payload);
     } catch (error) {
       throw this.handleLoanError(error as ApiError);
     }
   }
 
-  // Obter empréstimos do usuário
-  async getLoans(): Promise<Loan[]> {
+  async approveLoan(loanId: number): Promise<Loan> {
     try {
-      const response = await apiService.get<Loan[]>('/loans');
-      return response;
+      return await apiService.post<Loan>(`/loans/${loanId}/approve`, {});
     } catch (error) {
       throw this.handleLoanError(error as ApiError);
     }
   }
 
-  // Obter detalhes de um empréstimo
-  async getLoan(loanId: number): Promise<Loan> {
+  async getLoans(params?: LoanListParams): Promise<Loan[]> {
     try {
-      const response = await apiService.get<Loan>(`/loans/${loanId}`);
-      return response;
+      const query = params?.userId ? `?user_id=${params.userId}` : '';
+      return await apiService.get<Loan[]>(`/loans${query}`);
     } catch (error) {
       throw this.handleLoanError(error as ApiError);
     }
   }
 
-  // Tratar erros específicos de empréstimos
   private handleLoanError(error: ApiError): Error {
-    const errorMessages: { [key: number]: string } = {
-      400: 'Dados inválidos. Verifique os valores e tente novamente',
-      401: 'Você precisa estar logado para solicitar empréstimos',
-      403: 'Operação não permitida',
-      409: 'Pool sem saldo suficiente para este empréstimo',
-      500: 'Erro interno do servidor. Tente novamente mais tarde',
+    const errorMessages: Record<number, string> = {
+      400: 'Dados inválidos. Verifique os valores e tente novamente.',
+      401: 'Você precisa estar logado para solicitar empréstimos.',
+      403: 'Operação não permitida.',
+      404: 'Empréstimo não encontrado.',
+      409: 'Pool sem saldo suficiente para este empréstimo.',
+      500: 'Erro interno do servidor. Tente novamente mais tarde.',
     };
 
-    const message = errorMessages[error.status] || error.message || 'Erro desconhecido';
+    const message = errorMessages[error.status] || error.message || 'Erro desconhecido.';
     return new Error(message);
   }
 }
 
-// Instância singleton do serviço
 export const loanService = new LoanService();
 
-// Exportar também a classe
 export default LoanService;

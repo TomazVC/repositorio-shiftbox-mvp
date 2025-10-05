@@ -1,103 +1,92 @@
-import { apiService, ApiError } from './api';
+﻿import { apiService, ApiError } from './api';
+import { Wallet, Transaction, Investment } from '../types';
 
-// Interfaces para carteira
-export interface Wallet {
-  id: number;
-  user_id: number;
-  saldo: number;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface Transaction {
-  id: number;
-  wallet_id: number;
-  type: 'deposit' | 'withdraw' | 'investment' | 'loan' | 'return';
+type InvestmentPayload = {
+  userId: number;
   amount: number;
-  description: string;
-  status: 'pending' | 'completed' | 'failed';
-  created_at: string;
-}
+};
 
-export interface InvestmentRequest {
+type WithdrawPayload = {
+  walletId: number;
   amount: number;
   description?: string;
-}
+};
 
-export interface WithdrawRequest {
-  amount: number;
-  description?: string;
-}
+type TransactionFilter = {
+  walletId: number;
+};
 
 class WalletService {
-  // Obter saldo da carteira
-  async getWallet(): Promise<Wallet> {
+  async getWalletByUser(userId: number): Promise<Wallet> {
     try {
-      const response = await apiService.get<Wallet>('/wallet');
-      return response;
+      return await apiService.get<Wallet>(`/wallets/user/${userId}`);
     } catch (error) {
       throw this.handleWalletError(error as ApiError);
     }
   }
 
-  // Obter histórico de transações
-  async getTransactions(): Promise<Transaction[]> {
+  async getWallet(walletId: number): Promise<Wallet> {
     try {
-      const response = await apiService.get<Transaction[]>('/transactions');
-      return response;
+      return await apiService.get<Wallet>(`/wallets/${walletId}`);
     } catch (error) {
       throw this.handleWalletError(error as ApiError);
     }
   }
 
-  // Fazer investimento
-  async invest(data: InvestmentRequest): Promise<{ message: string; investment_id: number }> {
+  async getTransactions({ walletId }: TransactionFilter): Promise<Transaction[]> {
     try {
-      const response = await apiService.post('/investments', data);
-      return response;
+      return await apiService.get<Transaction[]>(`/wallets/${walletId}/transactions`);
     } catch (error) {
       throw this.handleWalletError(error as ApiError);
     }
   }
 
-  // Sacar dinheiro
-  async withdraw(data: WithdrawRequest): Promise<{ message: string; transaction_id: number }> {
+  async invest({ userId, amount }: InvestmentPayload): Promise<Investment> {
     try {
-      const response = await apiService.post('/wallet/withdraw', data);
-      return response;
+      const payload = {
+        user_id: userId,
+        valor: amount,
+        taxa_rendimento: 0.12,
+        rendimento_acumulado: 0,
+        status: 'ativo',
+      };
+
+      return await apiService.post<Investment>('/investments', payload);
     } catch (error) {
       throw this.handleWalletError(error as ApiError);
     }
   }
 
-  // Depositar dinheiro
-  async deposit(data: WithdrawRequest): Promise<{ message: string; transaction_id: number }> {
+  async withdraw({ walletId, amount, description }: WithdrawPayload): Promise<Transaction> {
     try {
-      const response = await apiService.post('/wallet/deposit', data);
-      return response;
+      const payload = {
+        wallet_id: walletId,
+        tipo: 'saque',
+        valor: amount,
+        descricao: description ?? 'Saque da carteira',
+      };
+
+      return await apiService.post<Transaction>('/transactions', payload);
     } catch (error) {
       throw this.handleWalletError(error as ApiError);
     }
   }
 
-  // Tratar erros específicos da carteira
   private handleWalletError(error: ApiError): Error {
-    const errorMessages: { [key: number]: string } = {
-      400: 'Dados inválidos. Verifique o valor e tente novamente',
-      401: 'Você precisa estar logado para acessar sua carteira',
-      403: 'Operação não permitida',
-      404: 'Carteira não encontrada',
-      409: 'Saldo insuficiente para esta operação',
-      500: 'Erro interno do servidor. Tente novamente mais tarde',
+    const errorMessages: Record<number, string> = {
+      400: 'Dados inválidos. Verifique o valor e tente novamente.',
+      401: 'Você precisa estar logado para acessar a carteira.',
+      403: 'Operação não permitida.',
+      404: 'Carteira não encontrada.',
+      409: 'Saldo insuficiente para esta operação.',
+      500: 'Erro interno do servidor. Tente novamente mais tarde.',
     };
 
-    const message = errorMessages[error.status] || error.message || 'Erro desconhecido';
+    const message = errorMessages[error.status] || error.message || 'Erro desconhecido.';
     return new Error(message);
   }
 }
 
-// Instância singleton do serviço
 export const walletService = new WalletService();
 
-// Exportar também a classe
 export default WalletService;
