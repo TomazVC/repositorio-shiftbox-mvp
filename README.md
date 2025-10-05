@@ -1,295 +1,178 @@
-# 🚀 ShiftBox MVP - Monorepo
+﻿# ShiftBox MVP - Monorepo
 
-Plataforma de investimento e empréstimos peer-to-peer com pool de liquidez compartilhado.
+Plataforma MVP para gestao de investimentos e emprestimos P2P com pool compartilhado de liquidez.
 
-## 📁 Estrutura do Projeto
+## Estrutura do projeto
 
 ```
 shiftbox-mvp/
-├─ backend/          # API FastAPI
-├─ frontend/         # Admin Web (React + Vite)
-├─ mobile/           # App Mobile (React Native + Expo)
-└─ docs/             # Documentação
+|-- backend/    # API FastAPI + SQLAlchemy
+|-- frontend/   # Painel admin (React + Vite)
+|-- mobile/     # App mobile (React Native + Expo)
+`-- docs/       # Documentacao auxiliar
 ```
 
 ---
 
-## 🛠️ Stack Tecnológica
+## Stack
 
 ### Backend
-- **Framework:** FastAPI
-- **ORM:** SQLAlchemy
-- **Database:** PostgreSQL
-- **Auth:** JWT (python-jose + passlib)
-- **Migrations:** Alembic
+- FastAPI 0.104
+- SQLAlchemy 2.x + Alembic
+- SQLite local (desenvolvimento) / PostgreSQL futuro
+- Autenticacao JWT (python-jose + passlib/bcrypt)
+- Calculos financeiros com `Decimal` (ROUND_HALF_EVEN)
+- Job diario de accrual (`python accrual_job.py`)
 
-### Frontend (Admin)
-- **Framework:** React 18 + TypeScript
-- **Build Tool:** Vite
-- **Styling:** TailwindCSS
-- **State/Data:** React Query + Axios
-- **Routing:** React Router v6
+### Frontend
+- React 18 + Vite + TypeScript
+- TailwindCSS, React Query, Axios
 
-### Mobile (App)
-- **Framework:** React Native (Expo)
-- **Navigation:** React Navigation
-- **HTTP Client:** Axios
-- **Storage:** AsyncStorage
-- **Styling:** NativeWind (Tailwind for RN)
+### Mobile
+- React Native (Expo) + TypeScript
+- React Navigation, Axios, AsyncStorage
 
 ---
 
-## 🚀 Como Rodar o Projeto
+## Como rodar o backend
 
-### 📋 Pré-requisitos
+```powershell
+cd backend
 
-- **Docker & Docker Compose** (para backend)
-- **Node.js 18+** (para frontend e mobile)
-- **npm ou yarn**
+# criar/atualizar o ambiente virtual e instalar dependencias
+.\setup.ps1
 
----
+# em cada nova sessao PowerShell
+.\venv\Scripts\Activate.ps1
+$env:USE_SQLITE = "true"   # garante uso do banco local
 
-### 🔧 Backend (FastAPI)
+# aplicar migrations
+.\venv\Scripts\alembic.exe upgrade head
 
-```bash
-# Navegar até a raiz do projeto
-cd shiftbox-mvp
+# popular dados de teste (opcional)
+$env:PYTHONIOENCODING = "utf-8"
+.\venv\Scripts\python.exe seed_data.py
 
-# Subir banco de dados e API
-docker-compose up --build
-
-# API estará rodando em: http://localhost:8000
-# Docs interativas: http://localhost:8000/docs
+# subir API
+py -m uvicorn app.main:app --reload
 ```
 
-**Credenciais de Teste:**
-- Admin: `admin@shiftbox.com` / `admin123`
-- Usuário: `user@shiftbox.com` / `user123`
+API: `http://127.0.0.1:8000`
+Swagger: `http://127.0.0.1:8000/docs`
+
+### Autenticacao
+
+Fluxo OAuth2 password:
+1. Cadastre um usuario real em `POST /auth/register` (payload `UserCreate`).
+2. Faca login em `POST /auth/login` (username = email, password = senha).
+3. Anote o token JWT retornado.
+4. No Swagger clique em **Authorize** e informe username/senha (ou `Bearer <token>` manualmente).
+5. Consulte `GET /auth/me` para validar o usuario autenticado.
+
+### Endpoints principais
+
+| Recurso | Operacoes | Observacoes |
+|---------|-----------|-------------|
+| `/auth` | register, login, me | JWT valido por 30 minutos |
+| `/users` | CRUD + status | acoes administrativas exigem usuario admin |
+| `/wallets` | CRUD + historico | delete exige saldo zero e sem historico |
+| `/investments` | CRUD + preview/schedule/resgate | calculo composto com Decimal e reprocessamento da fila |
+| `/loans` | CRUD + preview/schedule + fila automatica | emprestimos >80% entram em fila; juros diários acumulados via job |
+| `/transactions` | CRUD | delete reverte impacto no saldo |
+| `/kyc` | upload, listar e revisar documentos | revisao exige usuario admin |
+| `/pool` | status do pool | mostra utilizacao, fila e limite de 80% |
+
+**Regra do Pool:**
+- Utilizacao calculada em tempo real com base nos investimentos ativos e emprestimos pendentes/ativos.
+- Quando a utilizacao ultrapassa 80%, novos emprestimos sao colocados em fila (`status = "fila"`).
+- A cada aporte, resgate ou pagamento de emprestimo, a fila e reprocessada automaticamente.
+- `accrual_job.py` contabiliza diariamente os juros de investimentos/emprestimos e gera `Transactions` (`rendimento_acumulado`, `juros_acumulado`) de forma idempotente.
+
+### Job diario (accrual)
+
+```powershell
+# executar manualmente
+.\venv\Scripts\Activate.ps1
+$env:USE_SQLITE = "true"
+python accrual_job.py
+```
+
+O job analisa investimentos ativos e emprestimos pendentes/ativos, calcula os juros dos dias decorridos (Decimal) e grava Transactions de auditoria. Campos `last_accrual_at` e `interest_accrued` evitam recalculo do mesmo periodo.
 
 ---
 
-### 💻 Frontend Web (Admin)
+## Como rodar o frontend (admin)
 
 ```bash
-# Navegar até o diretório
 cd frontend
-
-# Instalar dependências
 npm install
-
-# Criar arquivo .env
-echo "VITE_API_URL=http://localhost:8000" > .env
-
-# Rodar em modo desenvolvimento
 npm run dev
-
-# Frontend estará em: http://localhost:3000
 ```
+Acesse `http://localhost:3000`. Configure `VITE_API_URL` no `.env` se necessario.
 
-**Build para Produção:**
-```bash
-npm run build
-npm run preview
-```
-
----
-
-### 📱 Mobile (React Native)
+## Como rodar o mobile
 
 ```bash
-# Navegar até o diretório
 cd mobile
-
-# Instalar dependências
 npm install
-
-# Iniciar Expo
 npx expo start
-
-# Opções:
-# - Pressione 'w' para web
-# - Pressione 'a' para Android (emulador ou dispositivo)
-# - Pressione 'i' para iOS (apenas macOS)
-# - Escaneie o QR Code com Expo Go (Android/iOS)
 ```
-
-**⚠️ Nota sobre API no Mobile:**
-- Para testar em dispositivo físico, altere `API_URL` em `mobile/screens/Login.tsx`
-- Use o IP da sua máquina: `http://192.168.x.x:8000`
+Use Expo Go ou emulador. Ajuste a constante de API para o IP da maquina ao testar em dispositivo fisico.
 
 ---
 
-## 🌿 Estratégia de Branches
+## Testes rapidos
 
-```
-main          # Código em produção
-dev           # Desenvolvimento integrado
-feature/*     # Novas funcionalidades
-bugfix/*      # Correções de bugs
-hotfix/*      # Correções urgentes em produção
-```
-
-### 📝 Fluxo de Trabalho
-
-1. **Criar branch a partir de `dev`:**
-   ```bash
-   git checkout dev
-   git pull origin dev
-   git checkout -b feature/nome-da-feature
-   ```
-
-2. **Fazer commits atômicos:**
-   ```bash
-   git add .
-   git commit -m "feat: adicionar autenticação JWT"
-   ```
-
-3. **Push e abrir Pull Request:**
-   ```bash
-   git push origin feature/nome-da-feature
-   ```
-
-4. **Code Review e Merge para `dev`**
-
-5. **Deploy: `dev` → `main`**
-
----
-
-## 📚 Documentação
-
-- **API Contract:** [docs/api-contract.md](docs/api-contract.md)
-- **API Docs (Swagger):** http://localhost:8000/docs
-- **Redoc:** http://localhost:8000/redoc
-
----
-
-## 🧪 Testando Localmente
-
-### Backend
 ```bash
-# Testar health check
-curl http://localhost:8000/health
+# health check
+curl http://127.0.0.1:8000/health
 
-# Login
-curl -X POST http://localhost:8000/auth/login \
+# login (form data)
+curl -X POST http://127.0.0.1:8000/auth/login \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "username=joao.autenticado@example.com&password=Senha@123"
+
+# preview de investimento
+curl -X POST http://127.0.0.1:8000/investments/preview \
   -H "Content-Type: application/json" \
-  -d '{"email":"user@shiftbox.com","password":"user123"}'
-```
+  -H "Authorization: Bearer <TOKEN>" \
+  -d '{"valor": "10000", "taxa_rendimento": "0.12", "dias": 90, "tipo": "composto"}'
 
-### Frontend
-1. Acesse http://localhost:3000
-2. Faça login com: `admin@shiftbox.com` / `admin123`
-3. Navegue pelo dashboard
+# cronograma de emprestimo
+curl http://127.0.0.1:8000/loans/1/schedule \
+  -H "Authorization: Bearer <TOKEN>"
 
-### Mobile
-1. Inicie o Expo: `npx expo start`
-2. Abra no Expo Go ou emulador
-3. Faça login com: `user@shiftbox.com` / `user123`
-
----
-
-## 🎯 Roadmap MVP
-
-### ✅ Fase 1 - Estrutura Base (Atual)
-- [x] Backend FastAPI com autenticação
-- [x] Frontend React com dashboard
-- [x] Mobile React Native com navegação
-- [x] Docker Compose configurado
-- [x] Documentação inicial
-
-### 🚧 Fase 2 - Funcionalidades Core
-- [ ] Sistema completo de carteira digital
-- [ ] Investimento no pool
-- [ ] Solicitação de empréstimos
-- [ ] Cálculo automático de juros
-- [ ] Sistema de transações
-
-### 🔮 Fase 3 - Features Avançadas
-- [ ] Dashboard analytics
-- [ ] Notificações push
-- [ ] Sistema de crédito score
-- [ ] Integração com pagamentos
-- [ ] KYC (Know Your Customer)
-
----
-
-## 🤝 Contribuindo
-
-### Convenção de Commits
-
-```
-feat:     Nova funcionalidade
-fix:      Correção de bug
-docs:     Documentação
-style:    Formatação (sem mudança de código)
-refactor: Refatoração
-test:     Testes
-chore:    Tarefas de build/config
-```
-
-**Exemplos:**
-```bash
-git commit -m "feat: adicionar endpoint de empréstimo"
-git commit -m "fix: corrigir cálculo de juros"
-git commit -m "docs: atualizar README com instruções"
+# job de juroscd backend
+python accrual_job.py
 ```
 
 ---
 
-## 📦 Deploy (Futuro)
+## Roadmap (MVP)
 
-### Backend
-- **Recomendado:** Railway, Render, Fly.io
-- **Database:** Supabase, Neon, RDS
-
-### Frontend
-- **Recomendado:** Vercel, Netlify
-
-### Mobile
-- **iOS:** App Store Connect
-- **Android:** Google Play Console
-- **OTA Updates:** Expo EAS Update
-
----
-
-## 🐛 Troubleshooting
-
-### Backend não inicia
-```bash
-# Verificar se as portas estão em uso
-docker-compose down
-docker-compose up --build --force-recreate
-```
-
-### Frontend não conecta à API
-```bash
-# Verificar .env
-cat frontend/.env
-
-# Deve conter:
-# VITE_API_URL=http://localhost:8000
-```
-
-### Mobile não conecta à API
-- Em emulador: use `http://localhost:8000`
-- Em dispositivo físico: use `http://SEU_IP:8000`
-- Verifique firewall e rede local
+- [x] Modelagem completa (users, wallets, transactions, investments, loans)
+- [x] Migrations Alembic e scripts de seed/inspect
+- [x] CRUDs e regras basicas (resgate, limite 80%, cancelamentos)
+- [x] Autenticacao real com JWT
+- [x] Fila automatica de emprestimos (>80% pool)
+- [x] Upload/listagem/revisao de documentos KYC
+- [x] Calculos financeiros (preview, cronogramas, APY, PRICE/SAC)
+- [x] Job diario de accrual (interest_accrual transactions)
+- [ ] Migracao para PostgreSQL e ambiente Docker
+- [ ] Testes automatizados e cobertura de regras de negocio
+- [ ] Ajustes finais de UX no front e mobile
 
 ---
 
-## 📧 Contato
+## Troubleshooting
 
-Para dúvidas ou sugestões:
-- **Email:** dev@shiftbox.com
-- **Docs:** [docs/api-contract.md](docs/api-contract.md)
-
----
-
-## 📄 Licença
-
-Este projeto é um MVP para hackathon/desenvolvimento interno.
+- **ModuleNotFoundError psycopg2**: use `$env:USE_SQLITE="true"` ou instale `psycopg2-binary` ao utilizar PostgreSQL.
+- **Caracteres corrompidos no console**: defina `PYTHONIOENCODING=utf-8` antes dos scripts que imprimem emoji.
+- **Swagger nao autentica**: o login usa fluxo password; informe username/senha no modal ou gere o token via `curl`.
 
 ---
 
-**Desenvolvido com ❤️ pela equipe ShiftBox**
+## Licenca
+
+Projeto MVP voltado a demonstracao interna. Uso restrito ao time ShiftBox.
 

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Models Module
 Importa todos os modelos para Alembic detectar
 """
@@ -8,6 +8,7 @@ from app.models.wallet import Wallet
 from app.models.transaction import Transaction
 from app.models.investment import Investment
 from app.models.loan import Loan
+from app.models.kyc_document import KycDocument
 
 __all__ = [
     "Base",
@@ -15,5 +16,6 @@ __all__ = [
     "Wallet",
     "Transaction",
     "Investment",
-    "Loan"
+    "Loan",
+    "KycDocument",
 ]

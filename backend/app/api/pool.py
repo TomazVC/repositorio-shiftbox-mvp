@@ -1,11 +1,17 @@
 ﻿"""Pool dashboard API."""
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.api.auth import get_current_user
 from app.db import get_db
-from app.models import Investment, Loan, Wallet
+from app.services.pool_service import (
+    POOL_THRESHOLD,
+    active_investors_count,
+    get_pool_totals,
+    queued_loans_count,
+)
+from app.models import User
 
 router = APIRouter(prefix="/pool", tags=["pool"])
 
@@ -16,31 +22,27 @@ class PoolResponse(BaseModel):
     saldo_emprestado: float
     percentual_utilizacao: float
     total_investidores: int
+    emprestimos_em_fila: int
+    limite_utilizacao: float
 
 
 @router.get("", response_model=PoolResponse)
-async def get_pool_status(db: Session = Depends(get_db)) -> PoolResponse:
-    saldo_total = db.query(func.coalesce(func.sum(Wallet.saldo), 0.0)).scalar()
-    saldo_emprestado = (
-        db.query(func.coalesce(func.sum(Loan.valor), 0.0))
-        .filter(Loan.status.in_(["pendente", "ativo"]))
-        .scalar()
-    )
-    saldo_disponivel = max((saldo_total or 0.0) - (saldo_emprestado or 0.0), 0.0)
+async def get_pool_status(
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> PoolResponse:
+    total_investido, total_comprometido = get_pool_totals(db)
+    saldo_disponivel = max(total_investido - total_comprometido, 0.0)
     percentual_utilizacao = 0.0
-    if saldo_total:
-        percentual_utilizacao = round((saldo_emprestado or 0.0) / saldo_total * 100, 2)
-
-    total_investidores = (
-        db.query(func.count(func.distinct(Investment.user_id)))
-        .filter(Investment.status == "ativo")
-        .scalar()
-    ) or 0
+    if total_investido:
+        percentual_utilizacao = round((total_comprometido / total_investido) * 100, 2)
 
     return PoolResponse(
-        saldo_total=float(saldo_total or 0.0),
-        saldo_disponivel=float(saldo_disponivel),
-        saldo_emprestado=float(saldo_emprestado or 0.0),
+        saldo_total=total_investido,
+        saldo_disponivel=saldo_disponivel,
+        saldo_emprestado=total_comprometido,
         percentual_utilizacao=percentual_utilizacao,
-        total_investidores=int(total_investidores),
+        total_investidores=active_investors_count(db),
+        emprestimos_em_fila=queued_loans_count(db),
+        limite_utilizacao=POOL_THRESHOLD * 100,
     )
