@@ -7,6 +7,7 @@ import Modal from '../components/Modal'
 import Input from '../components/Input'
 import Select from '../components/Select'
 import { ToastContainer } from '../components/Toast'
+import UserInvestmentDetails from '../components/UserInvestmentDetails'
 import { Investment, mockInvestments, getActiveUsers } from '../data/mockData'
 import Icon from '../components/Icon'
 
@@ -21,6 +22,7 @@ export default function Investments() {
     status: 'ativo' as 'ativo' | 'resgatado'
   })
   const [createLoading, setCreateLoading] = useState(false)
+  const [selectedUserId, setSelectedUserId] = useState<number | null>(null)
   const { toasts, removeToast, success } = useToast()
 
   // Obter apenas usuários ativos (KYC aprovado)
@@ -61,6 +63,10 @@ export default function Investments() {
   const totalAtivo = investments
     .filter(inv => inv.status === 'ativo')
     .reduce((sum, inv) => sum + inv.valor, 0)
+
+  const handleUserClick = (userId: number) => {
+    setSelectedUserId(userId)
+  }
 
   const handleCreateInvestment = async () => {
     if (!createForm.user_id || !createForm.valor) {
@@ -225,6 +231,15 @@ export default function Investments() {
 
       {/* Tabela */}
       <div className="table-container">
+        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="flex items-center gap-2 text-blue-700">
+            <Icon name="info" size={16} />
+            <span className="text-sm font-medium">
+              💡 Dica: Clique em qualquer investidor para ver informações detalhadas
+            </span>
+          </div>
+        </div>
+        
         <table className="table">
           <thead>
             <tr>
@@ -238,10 +253,24 @@ export default function Investments() {
           </thead>
           <tbody>
             {investments.map((investment) => (
-              <tr key={investment.id}>
+              <tr 
+                key={investment.id}
+                className="cursor-pointer hover:bg-gray-50 transition-colors"
+                onClick={() => handleUserClick(investment.user_id)}
+                title="Clique para ver detalhes do investidor"
+              >
                 <td style={{ color: 'var(--text-secondary)' }}>#{investment.id}</td>
                 <td>
-                  <span className="font-medium">{investment.user_name}</span>
+                  <div className="flex items-center gap-2">
+                    <div 
+                      className="h-8 w-8 rounded-full flex items-center justify-center text-white font-medium text-sm"
+                      style={{ backgroundColor: 'var(--color-primary)' }}
+                    >
+                      {investment.user_name.charAt(0)}
+                    </div>
+                    <span className="font-medium">{investment.user_name}</span>
+                    <Icon name="eye" className="w-4 h-4 text-gray-400 ml-2" />
+                  </div>
                 </td>
                 <td className="font-semibold">{formatCurrency(investment.valor)}</td>
                 <td style={{ color: 'var(--color-green)' }} className="font-medium">
@@ -256,6 +285,15 @@ export default function Investments() {
           </tbody>
         </table>
       </div>
+
+      {/* Modal de Detalhes do Usuário */}
+      {selectedUserId && (
+        <UserInvestmentDetails
+          userId={selectedUserId}
+          isOpen={!!selectedUserId}
+          onClose={() => setSelectedUserId(null)}
+        />
+      )}
 
       {/* Toasts */}
       <ToastContainer toasts={toasts} onRemove={removeToast} />

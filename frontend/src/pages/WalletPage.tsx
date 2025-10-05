@@ -4,19 +4,38 @@ import Modal from '../components/Modal'
 import Icon from '../components/Icon'
 import DepositModal from '../components/DepositModalNew'
 import WithdrawModal from '../components/WithdrawModalNew'
-import { getWalletByUserId, getTransactionsByUserId, mockUsers } from '../data/mockData'
+import UserFilter from '../components/UserFilter'
+import WalletDisplay from '../components/WalletDisplay'
+import TestWalletFilter from '../components/TestWalletFilter'
+import { getWalletByUserId, getTransactionsByUserId, mockUsers, User } from '../data/mockData'
 import { formatCurrency } from '../utils/format'
 
 export const WalletPage = () => {
   const [showDepositModal, setShowDepositModal] = useState(false)
   const [showWithdrawModal, setShowWithdrawModal] = useState(false)
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null)
+  const [selectedUser, setSelectedUser] = useState<User | null>(null)
+  const [filteredUsers, setFilteredUsers] = useState<User[]>(mockUsers) // Inicializar com todos os usuários
+  const [viewMode, setViewMode] = useState<'personal' | 'admin'>('personal')
+  const [debugMode, setDebugMode] = useState(false)
 
-  // Para este exemplo, vamos usar o usuário ID 1
+  // Para este exemplo, vamos usar o usuário ID 1 como usuário logado
   const currentUserId = 1
   const wallet = getWalletByUserId(currentUserId)
   const transactions = getTransactionsByUserId(currentUserId)
   const user = mockUsers.find(u => u.id === currentUserId)
+
+  const handleUserSelect = (user: User | null) => {
+    setSelectedUser(user)
+  }
+
+  const handleUsersFilter = (users: User[]) => {
+    setFilteredUsers(users)
+  }
+
+  if (debugMode) {
+    return <TestWalletFilter />
+  }
 
   if (!wallet || !user) {
     return (
@@ -92,146 +111,213 @@ export const WalletPage = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Carteira</h1>
-          <p className="text-gray-600">Gerencie seus recursos financeiros</p>
+          <p className="text-gray-600">Gerencie recursos financeiros</p>
         </div>
-        <div className="flex gap-3">
-          <Button 
-            onClick={() => setShowDepositModal(true)}
-            className="flex items-center gap-2"
+        
+        <div className="flex items-center gap-3">
+          {/* Botão de Debug */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setDebugMode(!debugMode)}
+            className="text-xs"
           >
-            <Icon name="plus" className="w-4 h-4" />
-            Depositar
+            🐛 Debug
           </Button>
-          <Button 
-            variant="secondary" 
-            onClick={() => setShowWithdrawModal(true)}
-            className="flex items-center gap-2"
-          >
-            <Icon name="minus" className="w-4 h-4" />
-            Sacar
-          </Button>
+          
+          {/* Toggle entre vista pessoal e admin */}
+          <div className="flex bg-gray-100 rounded-lg p-1">
+            <button
+              onClick={() => setViewMode('personal')}
+              className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                viewMode === 'personal'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <Icon name="user" className="w-4 h-4 mr-1 inline" />
+              Minha Carteira
+            </button>
+            <button
+              onClick={() => setViewMode('admin')}
+              className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                viewMode === 'admin'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <Icon name="users" className="w-4 h-4 mr-1 inline" />
+              Todas as Carteiras
+            </button>
+          </div>
+
+          {viewMode === 'personal' && (
+            <>
+              <Button 
+                onClick={() => setShowDepositModal(true)}
+                className="flex items-center gap-2"
+              >
+                <Icon name="plus" className="w-4 h-4" />
+                Depositar
+              </Button>
+              <Button 
+                variant="secondary" 
+                onClick={() => setShowWithdrawModal(true)}
+                className="flex items-center gap-2"
+              >
+                <Icon name="minus" className="w-4 h-4" />
+                Sacar
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
-      {/* Métricas da Carteira */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <Icon name="wallet" className="w-6 h-6 text-blue-600" />
-            </div>
-          </div>
-          <h3 className="text-sm font-medium text-gray-600 mb-1">Saldo Disponível</h3>
-          <p className="text-2xl font-bold text-gray-900">{formatCurrency(wallet.available_balance)}</p>
-          <p className="text-sm text-gray-500 mt-1">Disponível para uso</p>
-        </div>
-        
-        <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-2 bg-amber-100 rounded-lg">
-              <Icon name="lock" className="w-6 h-6 text-amber-600" />
-            </div>
-          </div>
-          <h3 className="text-sm font-medium text-gray-600 mb-1">Saldo Bloqueado</h3>
-          <p className="text-2xl font-bold text-gray-900">{formatCurrency(wallet.blocked_balance)}</p>
-          <p className="text-sm text-gray-500 mt-1">Em processamento</p>
-        </div>
-        
-        <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-2 bg-green-100 rounded-lg">
-              <Icon name="chart-bar" className="w-6 h-6 text-green-600" />
-            </div>
-          </div>
-          <h3 className="text-sm font-medium text-gray-600 mb-1">Saldo Total</h3>
-          <p className="text-2xl font-bold text-gray-900">{formatCurrency(wallet.total_balance)}</p>
-          <p className="text-sm text-gray-500 mt-1">Total na conta</p>
-        </div>
-      </div>
-
-      {/* Transações Recentes */}
-      <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-        <div className="p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-semibold text-gray-900">Transações Recentes</h2>
-            <Button variant="secondary" size="sm">
-              <Icon name="download" className="w-4 h-4 mr-2" />
-              Exportar
-            </Button>
-          </div>
-
-          <div className="space-y-4">
-            {transactions.length === 0 ? (
-              <div className="text-center py-8">
-                <Icon name="credit-card" className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-600">Nenhuma transação encontrada</p>
-              </div>
-            ) : (
-              transactions.map((transaction) => (
-                <div 
-                  key={transaction.id}
-                  className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
-                  onClick={() => setSelectedTransaction(transaction)}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-gray-100 rounded-lg">
-                      <Icon 
-                        name={getTransactionIcon(transaction.type)} 
-                        className="w-5 h-5 text-gray-700" 
-                      />
-                    </div>
-                    <div>
-                      <h3 className="font-medium text-gray-900">
-                        {getTransactionTitle(transaction.type)}
-                      </h3>
-                      <p className="text-sm text-gray-600">{transaction.description}</p>
-                      <p className="text-xs text-gray-500">
-                        {new Date(transaction.created_at).toLocaleString('pt-BR')}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <div className="text-right">
-                      <div className="font-semibold">
-                        {formatTransactionAmount(transaction.amount)}
-                      </div>
-                      <div className={`flex items-center gap-1 text-sm ${getStatusColor(transaction.status)}`}>
-                        <Icon name={getStatusIcon(transaction.status)} className="w-3 h-3" />
-                        {transaction.status === 'completed' ? 'Concluída' :
-                         transaction.status === 'pending' ? 'Pendente' :
-                         transaction.status === 'failed' ? 'Falhada' : 'Cancelada'}
-                      </div>
-                    </div>
-                    <Icon name="chevron-right" className="w-4 h-4 text-gray-400" />
-                  </div>
+      {viewMode === 'personal' ? (
+        // Vista da carteira pessoal (código original)
+        <>
+          {/* Métricas da Carteira */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-2 bg-blue-100 rounded-lg">
+                  <Icon name="wallet" className="w-6 h-6 text-blue-600" />
                 </div>
-              ))
-            )}
+              </div>
+              <h3 className="text-sm font-medium text-gray-600 mb-1">Saldo Disponível</h3>
+              <p className="text-2xl font-bold text-gray-900">{formatCurrency(wallet?.available_balance || 0)}</p>
+              <p className="text-sm text-gray-500 mt-1">Disponível para uso</p>
+            </div>
+            
+            <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-2 bg-amber-100 rounded-lg">
+                  <Icon name="lock" className="w-6 h-6 text-amber-600" />
+                </div>
+              </div>
+              <h3 className="text-sm font-medium text-gray-600 mb-1">Saldo Bloqueado</h3>
+              <p className="text-2xl font-bold text-gray-900">{formatCurrency(wallet?.blocked_balance || 0)}</p>
+              <p className="text-sm text-gray-500 mt-1">Em processamento</p>
+            </div>
+            
+            <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-2 bg-green-100 rounded-lg">
+                  <Icon name="chart-bar" className="w-6 h-6 text-green-600" />
+                </div>
+              </div>
+              <h3 className="text-sm font-medium text-gray-600 mb-1">Saldo Total</h3>
+              <p className="text-2xl font-bold text-gray-900">{formatCurrency(wallet?.total_balance || 0)}</p>
+              <p className="text-sm text-gray-500 mt-1">Total na conta</p>
+            </div>
+          </div>
+
+          {/* Transações Recentes */}
+          <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-lg font-semibold text-gray-900">Transações Recentes</h2>
+                <Button variant="secondary" size="sm">
+                  <Icon name="download" className="w-4 h-4 mr-2" />
+                  Exportar
+                </Button>
+              </div>
+
+              <div className="space-y-4">
+                {transactions.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Icon name="credit-card" className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-600">Nenhuma transação encontrada</p>
+                  </div>
+                ) : (
+                  transactions.map((transaction) => (
+                    <div 
+                      key={transaction.id}
+                      className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                      onClick={() => setSelectedTransaction(transaction)}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-gray-100 rounded-lg">
+                          <Icon 
+                            name={getTransactionIcon(transaction.type)} 
+                            className="w-5 h-5 text-gray-700" 
+                          />
+                        </div>
+                        <div>
+                          <h3 className="font-medium text-gray-900">
+                            {getTransactionTitle(transaction.type)}
+                          </h3>
+                          <p className="text-sm text-gray-600">{transaction.description}</p>
+                          <p className="text-xs text-gray-500">
+                            {new Date(transaction.created_at).toLocaleString('pt-BR')}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <div className="text-right">
+                          <div className="font-semibold">
+                            {formatTransactionAmount(transaction.amount)}
+                          </div>
+                          <div className={`flex items-center gap-1 text-sm ${getStatusColor(transaction.status)}`}>
+                            <Icon name={getStatusIcon(transaction.status)} className="w-3 h-3" />
+                            {transaction.status === 'completed' ? 'Concluída' :
+                             transaction.status === 'pending' ? 'Pendente' :
+                             transaction.status === 'failed' ? 'Falhada' : 'Cancelada'}
+                          </div>
+                        </div>
+                        <Icon name="chevron-right" className="w-4 h-4 text-gray-400" />
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </>
+      ) : (
+        // Vista admin com filtros
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-1">
+            <UserFilter
+              onUserSelect={handleUserSelect}
+              onUsersFilter={handleUsersFilter}
+              selectedUser={selectedUser}
+            />
+          </div>
+          <div className="lg:col-span-2">
+            <WalletDisplay
+              users={filteredUsers}
+              selectedUser={selectedUser}
+            />
           </div>
         </div>
-      </div>
+      )}
 
       {/* Modais */}
-      <DepositModal 
-        isOpen={showDepositModal}
-        onClose={() => setShowDepositModal(false)}
-        wallet={wallet}
-        onSuccess={() => {
-          setShowDepositModal(false)
-          // Aqui você atualizaria os dados da carteira
-        }}
-      />
+      {viewMode === 'personal' && (
+        <>
+          <DepositModal 
+            isOpen={showDepositModal}
+            onClose={() => setShowDepositModal(false)}
+            wallet={wallet}
+            onSuccess={() => {
+              setShowDepositModal(false)
+              // Aqui você atualizaria os dados da carteira
+            }}
+          />
 
-      <WithdrawModal 
-        isOpen={showWithdrawModal}
-        onClose={() => setShowWithdrawModal(false)}
-        wallet={wallet}
-        onSuccess={() => {
-          setShowWithdrawModal(false)
-          // Aqui você atualizaria os dados da carteira
-        }}
-      />
+          <WithdrawModal 
+            isOpen={showWithdrawModal}
+            onClose={() => setShowWithdrawModal(false)}
+            wallet={wallet}
+            onSuccess={() => {
+              setShowWithdrawModal(false)
+              // Aqui você atualizaria os dados da carteira
+            }}
+          />
+        </>
+      )}
 
       {/* Modal de Detalhes da Transação */}
       {selectedTransaction && (
