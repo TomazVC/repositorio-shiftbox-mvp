@@ -5,8 +5,8 @@ import Icon from './Icon'
 import Modal from './Modal'
 import Input from './Input'
 import { formatCurrency } from '../utils/format'
-import { getLoanApplicationById, updateLoanApplication } from '../data/mockData'
-import { LoanApplication, ApprovalDetails } from '../types/wallet'
+import { useLoanApplication } from '../hooks/useLoanApplication'
+import { ApprovalDetails } from '../types/wallet'
 
 interface LoanApprovalWorkflowProps {
   applicationId: number
@@ -15,8 +15,7 @@ interface LoanApprovalWorkflowProps {
 }
 
 const LoanApprovalWorkflow = ({ applicationId, onApprovalChange, className = '' }: LoanApprovalWorkflowProps) => {
-  const [application, setApplication] = useState<LoanApplication | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const { application, isLoading, error, updateApplication } = useLoanApplication(applicationId)
   const [showApprovalModal, setShowApprovalModal] = useState(false)
   const [approvalType, setApprovalType] = useState<'approve' | 'reject' | null>(null)
   const [approvalComment, setApprovalComment] = useState('')
@@ -24,27 +23,13 @@ const LoanApprovalWorkflow = ({ applicationId, onApprovalChange, className = '' 
   const [adjustedRate, setAdjustedRate] = useState('')
   const [isProcessing, setIsProcessing] = useState(false)
 
+  // Atualizar valores quando a aplicação carrega
   useEffect(() => {
-    loadApplication()
-  }, [applicationId])
-
-  const loadApplication = async () => {
-    setIsLoading(true)
-    try {
-      // Simular carregamento
-      setTimeout(() => {
-        const app = getLoanApplicationById(applicationId)
-        setApplication(app || null)
-        if (app) {
-          setAdjustedAmount(app.requested_amount.toString())
-          setAdjustedRate(app.proposed_interest_rate.toString())
-        }
-        setIsLoading(false)
-      }, 1000)
-    } catch (error) {
-      setIsLoading(false)
+    if (application) {
+      setAdjustedAmount(application.requested_amount.toString())
+      setAdjustedRate(application.proposed_interest_rate.toString())
     }
-  }
+  }, [application])
 
   const handleApproval = (type: 'approve' | 'reject') => {
     setApprovalType(type)
@@ -71,19 +56,17 @@ const LoanApprovalWorkflow = ({ applicationId, onApprovalChange, className = '' 
         ] : []
       }
 
-      // Atualizar aplicação
-      const updatedApp = {
-        ...application,
-        status: approvalType === 'approve' ? 'approved' as const : 'rejected' as const,
-        approval_details: approvalDetails
+      // Usar o hook para atualizar via API
+      const updatedApp = await updateApplication(
+        approvalType === 'approve' ? 'approved' : 'rejected',
+        approvalDetails
+      )
+
+      if (updatedApp) {
+        onApprovalChange?.(approvalType === 'approve', approvalDetails)
+        setShowApprovalModal(false)
+        setApprovalComment('')
       }
-
-      updateLoanApplication(updatedApp)
-      setApplication(updatedApp)
-      onApprovalChange?.(approvalType === 'approve', approvalDetails)
-
-      setShowApprovalModal(false)
-      setApprovalComment('')
     } catch (error) {
       console.error('Erro ao processar aprovação:', error)
     } finally {
@@ -126,6 +109,24 @@ const LoanApprovalWorkflow = ({ applicationId, onApprovalChange, className = '' 
         <div className="p-8 text-center">
           <Icon name="clock" className="w-8 h-8 text-gray-400 mx-auto mb-4 animate-spin" />
           <p className="text-gray-600">Carregando solicitação...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className={`bg-white rounded-lg border border-gray-200 shadow-sm ${className}`}>
+        <div className="p-8 text-center">
+          <Icon name="warning" className="w-8 h-8 text-red-400 mx-auto mb-4" />
+          <p className="text-gray-600">Erro: {error}</p>
+          <Button 
+            onClick={() => window.location.reload()} 
+            className="mt-4"
+            variant="secondary"
+          >
+            Tentar Novamente
+          </Button>
         </div>
       </div>
     )
