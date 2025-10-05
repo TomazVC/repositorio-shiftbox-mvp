@@ -1,31 +1,45 @@
-// Configurações de ambiente para o app mobile
+import Constants from "expo-constants";
+
 export interface Environment {
   API_URL: string;
   APP_VERSION: string;
-  ENVIRONMENT: 'development' | 'production';
+  ENVIRONMENT: "development" | "production";
   TIMEOUT: number;
 }
 
-// Configuração de desenvolvimento
+const resolveApiUrl = (fallback: string): string => {
+  const runtimeUrl =
+    process.env.EXPO_PUBLIC_API_URL ??
+    process.env.API_URL ??
+    (Constants?.expoConfig?.extra as Record<string, any> | undefined)?.apiUrl ??
+    (Constants?.manifest2?.extra as Record<string, any> | undefined)?.apiUrl;
+
+  return typeof runtimeUrl === "string" && runtimeUrl.trim().length > 0
+    ? runtimeUrl.trim()
+    : fallback;
+};
+
+const shared: Pick<Environment, "APP_VERSION" | "TIMEOUT"> = {
+  APP_VERSION: "0.1.0",
+  TIMEOUT: 10000,
+};
+
 const development: Environment = {
-  API_URL: 'http://localhost:8000',
-  APP_VERSION: '0.1.0',
-  ENVIRONMENT: 'development',
-  TIMEOUT: 10000, // 10 segundos
+  API_URL: resolveApiUrl("http://localhost:8000"),
+  APP_VERSION: shared.APP_VERSION,
+  ENVIRONMENT: "development",
+  TIMEOUT: shared.TIMEOUT,
 };
 
-// Configuração de produção (para amanhã caso terminemos o projeto principal)
 const production: Environment = {
-  API_URL: 'https://api.shiftbox.com.br',
-  APP_VERSION: '0.1.0',
-  ENVIRONMENT: 'production',
-  TIMEOUT: 15000, // 15 segundos
+  API_URL: resolveApiUrl("https://api.shiftbox.com.br"),
+  APP_VERSION: shared.APP_VERSION,
+  ENVIRONMENT: "production",
+  TIMEOUT: 15000,
 };
 
-// Selecionar ambiente baseado no __DEV__ (React Native)
 const environment: Environment = __DEV__ ? development : production;
 
 export default environment;
 
-// Exportar constantes específicas para facilitar uso
 export const { API_URL, APP_VERSION, ENVIRONMENT, TIMEOUT } = environment;

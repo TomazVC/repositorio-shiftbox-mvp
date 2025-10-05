@@ -1,11 +1,10 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   ScrollView,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -22,65 +21,116 @@ type Props = {
   navigation: RegisterScreenNavigationProp;
 };
 
+type FormErrors = Partial<{
+  name: string;
+  email: string;
+  cpf: string;
+  dateOfBirth: string;
+  password: string;
+  confirmPassword: string;
+  general: string;
+}>;
+
 export default function Register({ navigation }: Props) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [cpf, setCpf] = useState('');
+  const [dateOfBirth, setDateOfBirth] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState<FormErrors>({});
+  const [successMessage, setSuccessMessage] = useState('');
+
+  const validateForm = (): boolean => {
+    const nextErrors: FormErrors = {};
+
+    if (!name.trim()) {
+      nextErrors.name = 'Informe seu nome completo.';
+    }
+
+    if (!email.trim()) {
+      nextErrors.email = 'Informe um e-mail válido.';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      nextErrors.email = 'Formato de e-mail inválido.';
+    }
+
+    const digits = cpf.replace(/\D/g, '');
+    if (!digits) {
+      nextErrors.cpf = 'Informe o CPF.';
+    } else if (digits.length !== 11) {
+      nextErrors.cpf = 'O CPF deve ter 11 dígitos.';
+    }
+
+    if (!dateOfBirth.trim()) {
+      nextErrors.dateOfBirth = 'Informe a data de nascimento (AAAA-MM-DD).';
+    } else if (!/^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth.trim())) {
+      nextErrors.dateOfBirth = 'Use o formato AAAA-MM-DD.';
+    }
+
+    if (!password) {
+      nextErrors.password = 'Informe uma senha.';
+    } else if (password.length < 6) {
+      nextErrors.password = 'A senha deve ter pelo menos 6 caracteres.';
+    }
+
+    if (!confirmPassword) {
+      nextErrors.confirmPassword = 'Confirme a senha.';
+    } else if (confirmPassword !== password) {
+      nextErrors.confirmPassword = 'As senhas não coincidem.';
+    }
+
+    setErrors(nextErrors);
+    setSuccessMessage('');
+    return Object.keys(nextErrors).length === 0;
+  };
 
   const handleRegister = async () => {
-    if (!name || !email || !password || !confirmPassword) {
-      Alert.alert('Erro', 'Preencha todos os campos');
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      Alert.alert('Erro', 'As senhas não coincidem');
-      return;
-    }
-
-    if (password.length < 6) {
-      Alert.alert('Erro', 'A senha deve ter pelo menos 6 caracteres');
+    if (!validateForm()) {
       return;
     }
 
     setLoading(true);
+
     try {
       await authService.register({
-        name,
-        email,
+        fullName: name.trim(),
+        email: email.trim().toLowerCase(),
         password,
         confirmPassword,
+        cpf: cpf.replace(/\D/g, ''),
+        dateOfBirth: dateOfBirth.trim(),
       });
 
-      Alert.alert(
-        'Sucesso',
-        'Cadastro realizado! Faça login para continuar.',
-        [
-          {
-            text: 'OK',
-            onPress: () => navigation.navigate('Login'),
-          },
-        ]
-      );
+      setSuccessMessage('Cadastro realizado! Entre com seus dados para continuar.');
+      setErrors({});
+      setPassword('');
+      setConfirmPassword('');
+      navigation.navigate('Login');
     } catch (error: any) {
-      Alert.alert('Erro', error.message || 'Erro ao realizar cadastro');
+      setErrors({ general: error.message || 'Não foi possível concluir o cadastro.' });
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView
+      style={styles.wrapper}
+      contentContainerStyle={styles.scrollContent}
+      keyboardShouldPersistTaps="handled"
+    >
       <View style={styles.content}>
-        <Text style={styles.title}>Criar Conta</Text>
+        <Text style={styles.title}>Criar conta</Text>
         <Text style={styles.subtitle}>
-          Comece a investir e gerenciar seu dinheiro
+          Preencha seus dados para ativar sua carteira ShiftBox.
         </Text>
 
+        {errors.general ? <Text style={styles.errorText}>{errors.general}</Text> : null}
+        {successMessage ? <Text style={styles.successText}>{successMessage}</Text> : null}
+
         <View style={styles.form}>
-          <Text style={styles.label}>Nome Completo</Text>
+          <Text style={styles.label}>Nome completo</Text>
           <TextInput
             style={styles.input}
             placeholder="João Silva"
@@ -88,8 +138,9 @@ export default function Register({ navigation }: Props) {
             value={name}
             onChangeText={setName}
           />
+          {errors.name ? <Text style={styles.errorText}>{errors.name}</Text> : null}
 
-          <Text style={styles.label}>Email</Text>
+          <Text style={styles.label}>E-mail</Text>
           <TextInput
             style={styles.input}
             placeholder="seu@email.com"
@@ -99,26 +150,54 @@ export default function Register({ navigation }: Props) {
             keyboardType="email-address"
             autoCapitalize="none"
           />
+          {errors.email ? <Text style={styles.errorText}>{errors.email}</Text> : null}
+
+          <Text style={styles.label}>CPF</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="00000000000"
+            placeholderTextColor={COLORS.PLACEHOLDER}
+            value={cpf}
+            onChangeText={setCpf}
+            keyboardType="number-pad"
+            maxLength={14}
+          />
+          {errors.cpf ? <Text style={styles.errorText}>{errors.cpf}</Text> : null}
+
+          <Text style={styles.label}>Data de nascimento</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="AAAA-MM-DD"
+            placeholderTextColor={COLORS.PLACEHOLDER}
+            value={dateOfBirth}
+            onChangeText={setDateOfBirth}
+            keyboardType="numbers-and-punctuation"
+          />
+          {errors.dateOfBirth ? <Text style={styles.errorText}>{errors.dateOfBirth}</Text> : null}
 
           <Text style={styles.label}>Senha</Text>
           <TextInput
             style={styles.input}
-            placeholder="••••••••"
+            placeholder="********"
             placeholderTextColor={COLORS.PLACEHOLDER}
             value={password}
             onChangeText={setPassword}
             secureTextEntry
           />
+          {errors.password ? <Text style={styles.errorText}>{errors.password}</Text> : null}
 
-          <Text style={styles.label}>Confirmar Senha</Text>
+          <Text style={styles.label}>Confirmar senha</Text>
           <TextInput
             style={styles.input}
-            placeholder="••••••••"
+            placeholder="********"
             placeholderTextColor={COLORS.PLACEHOLDER}
             value={confirmPassword}
             onChangeText={setConfirmPassword}
             secureTextEntry
           />
+          {errors.confirmPassword ? (
+            <Text style={styles.errorText}>{errors.confirmPassword}</Text>
+          ) : null}
 
           <TouchableOpacity
             style={[styles.button, loading && styles.buttonDisabled]}
@@ -130,11 +209,8 @@ export default function Register({ navigation }: Props) {
             </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            style={styles.linkContainer}
-          >
-            <Text style={styles.linkText}>Já tem conta? Faça login</Text>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.linkContainer}>
+            <Text style={styles.linkText}>Já tem conta? Fazer login</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -143,37 +219,38 @@ export default function Register({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: {
+  wrapper: {
     flex: 1,
     backgroundColor: COLORS.BG_SCREEN,
   },
-  content: {
-    flex: 1,
+  scrollContent: {
+    // flexGrow: 1,
     padding: SPACING.LG,
+  },
+  content: {
     paddingTop: 60,
+    gap: SPACING.LG,
   },
   title: {
     fontSize: FONT_SIZES.TITLE_MAIN,
     fontWeight: '600',
     color: COLORS.TEXT_PRIMARY,
-    marginBottom: SPACING.SM,
   },
   subtitle: {
     fontSize: FONT_SIZES.BODY,
     color: COLORS.TEXT_SECONDARY,
-    marginBottom: SPACING.XL,
   },
   form: {
     backgroundColor: COLORS.BG_CARD,
     borderRadius: COMPONENTS.CARD_RADIUS,
     padding: SPACING.LG,
+    gap: SPACING.SM,
     ...COMPONENTS.CARD_SHADOW,
   },
   label: {
     fontSize: FONT_SIZES.SM,
     fontWeight: '600',
     color: COLORS.TEXT_PRIMARY,
-    marginBottom: SPACING.SM,
   },
   input: {
     height: COMPONENTS.INPUT_HEIGHT,
@@ -182,7 +259,6 @@ const styles = StyleSheet.create({
     borderRadius: COMPONENTS.INPUT_RADIUS,
     paddingHorizontal: SPACING.BASE,
     fontSize: FONT_SIZES.BODY,
-    marginBottom: SPACING.BASE,
     color: COLORS.TEXT_PRIMARY,
   },
   button: {
@@ -209,5 +285,13 @@ const styles = StyleSheet.create({
     color: COLORS.PRIMARY,
     fontSize: FONT_SIZES.SM,
     fontWeight: '500',
+  },
+  errorText: {
+    color: COLORS.ERROR,
+    fontSize: FONT_SIZES.SM,
+  },
+  successText: {
+    color: COLORS.SUCCESS,
+    fontSize: FONT_SIZES.SM,
   },
 });
