@@ -19,8 +19,9 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 def hash_password(password: str) -> str:
     """Gera hash da senha"""
     # Bcrypt tem limite de 72 bytes, truncar se necessário
-    if len(password.encode("utf-8")) > 72:
-        password = password[:72]
+    password_bytes = password.encode("utf-8")
+    if len(password_bytes) > 72:
+        password = password_bytes[:72].decode("utf-8")
     return pwd_context.hash(password)
 
 
@@ -42,6 +43,13 @@ def create_users(db):
     print("\n👥 Criando usuários...")
 
     users_data = [
+        {
+            "email": "admin@shiftbox.com",
+            "full_name": "Admin ShiftBox",
+            "password": "admin123",
+            "cpf": "11111111111",
+            "date_of_birth": date(1980, 1, 1),
+        },
         {
             "email": "joao@example.com",
             "full_name": "João Silva",
