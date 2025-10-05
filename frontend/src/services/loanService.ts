@@ -4,25 +4,21 @@ import { LoanApplication } from '../types/wallet'
 export interface BackendLoan {
   id: number
   user_id: number
-  amount: number
-  interest_rate: number
-  duration_months: number
-  purpose: string
-  status: string
-  monthly_income?: number
-  company_name?: string
+  valor: number
+  valor_pago: number
+  taxa_juros: number
+  prazo_meses: number
+  status: 'pendente' | 'ativo' | 'pago' | 'rejeitado'
   created_at: string
-  updated_at: string
-  approved_amount?: number
-  final_interest_rate?: number
+  updated_at?: string
   approved_at?: string
-  comments?: string
-  conditions?: string[]
+  paid_at?: string
+  motivo_rejeicao?: string
   user?: {
     id: number
     email: string
+    full_name?: string
     cpf?: string
-    name?: string
   }
 }
 
@@ -56,14 +52,19 @@ export const loanService = {
    */
   async createApplication(applicationData: {
     user_id: number
-    amount: number
-    duration_months: number
-    purpose: string
-    monthly_income?: number
-    company_name?: string
+    valor: number
+    prazo_meses: number
+    taxa_juros?: number
   }): Promise<LoanApplication> {
     try {
-      const response = await api.post('/loans', applicationData)
+      const payload = {
+        user_id: applicationData.user_id,
+        valor: applicationData.valor,
+        valor_pago: 0,
+        taxa_juros: applicationData.taxa_juros || 2.5,
+        prazo_meses: applicationData.prazo_meses
+      }
+      const response = await api.post('/loans', payload)
       return this.transformBackendLoan(response.data)
     } catch (error) {
       throw handleAPIError(error)
@@ -74,13 +75,11 @@ export const loanService = {
    * Aprovar empréstimo
    */
   async approveLoan(id: number, approvalData: {
-    approved_amount: number
-    final_interest_rate: number
-    comments: string
-    conditions?: string[]
+    taxa_juros?: number
+    prazo_meses?: number
   }): Promise<LoanApplication> {
     try {
-      const response = await api.put(`/loans/${id}/approve`, approvalData)
+      const response = await api.post(`/loans/${id}/approve`, approvalData)
       return this.transformBackendLoan(response.data)
     } catch (error) {
       throw handleAPIError(error)
@@ -91,10 +90,10 @@ export const loanService = {
    * Rejeitar empréstimo
    */
   async rejectLoan(id: number, rejectionData: {
-    comments: string
+    motivo_rejeicao: string
   }): Promise<LoanApplication> {
     try {
-      const response = await api.put(`/loans/${id}/reject`, rejectionData)
+      const response = await api.post(`/loans/${id}/reject`, rejectionData)
       return this.transformBackendLoan(response.data)
     } catch (error) {
       throw handleAPIError(error)
@@ -122,20 +121,19 @@ export const loanService = {
     return {
       id: backendLoan.id,
       user_id: backendLoan.user_id,
-      requested_amount: backendLoan.amount,
-      duration_months: backendLoan.duration_months,
-      purpose: this.mapPurpose(backendLoan.purpose),
+      requested_amount: backendLoan.valor,
+      duration_months: backendLoan.prazo_meses,
+      purpose: 'capital_giro', // Valor padrão já que não está no backend atual
       application_date: backendLoan.created_at,
       status: this.mapStatus(backendLoan.status),
-      proposed_interest_rate: backendLoan.interest_rate,
+      proposed_interest_rate: backendLoan.taxa_juros,
       applicant_info: {
         document: backendLoan.user?.cpf || '***.***.***-**',
-        monthly_income: backendLoan.monthly_income || 5000,
-        company_name: backendLoan.company_name || 'Empresa não informada'
+        monthly_income: 5000, // Valor padrão
+        company_name: 'Empresa não informada'
       },
-      // Análise de risco mockada por enquanto - pode ser implementada depois
       risk_analysis: {
-        score: 0.7, // Score médio
+        score: 0.7,
         risk_level: this.calculateRiskLevel(backendLoan),
         factors: {
           income_verification: 0.8,
@@ -148,15 +146,14 @@ export const loanService = {
         },
         recommendations: ['Verificar documentação', 'Confirmar dados bancários']
       },
-      // Detalhes da aprovação se existirem
-      approval_details: backendLoan.approved_amount ? {
-        approved: backendLoan.status === 'approved',
-        approved_amount: backendLoan.approved_amount,
-        final_interest_rate: backendLoan.final_interest_rate || backendLoan.interest_rate,
-        approval_date: backendLoan.approved_at || backendLoan.updated_at,
+      approval_details: backendLoan.status === 'ativo' ? {
+        approved: true,
+        approved_amount: backendLoan.valor,
+        final_interest_rate: backendLoan.taxa_juros,
+        approval_date: backendLoan.approved_at || backendLoan.created_at,
         approved_by: 'sistema',
-        comments: backendLoan.comments || '',
-        conditions: backendLoan.conditions || []
+        comments: '',
+        conditions: []
       } : undefined
     }
   },
@@ -180,10 +177,10 @@ export const loanService = {
    */
   mapStatus(status: string): LoanApplication['status'] {
     const statusMap: Record<string, LoanApplication['status']> = {
-      'pending': 'pending',
-      'under_review': 'under_review',
-      'approved': 'approved',
-      'rejected': 'rejected'
+      'pendente': 'pending',
+      'ativo': 'approved',
+      'pago': 'approved',
+      'rejeitado': 'rejected'
     }
     return statusMap[status] || 'pending'
   },
@@ -193,9 +190,9 @@ export const loanService = {
    */
   calculateRiskLevel(loan: BackendLoan): 'low' | 'medium' | 'high' {
     // Lógica simples para calcular risco
-    const amount = loan.amount
-    const income = loan.monthly_income || 5000
-    const ratio = amount / (income * loan.duration_months)
+    const amount = loan.valor
+    const income = 5000 // Valor padrão
+    const ratio = amount / (income * loan.prazo_meses)
 
     if (ratio < 0.3) return 'low'
     if (ratio < 0.6) return 'medium'

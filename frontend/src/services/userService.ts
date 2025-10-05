@@ -3,24 +3,23 @@ import api, { handleAPIError } from './api'
 export interface BackendUser {
   id: number
   email: string
-  name?: string
+  full_name?: string
   cpf?: string
-  phone?: string
-  birth_date?: string
-  address?: string
-  kyc_status: 'pending' | 'approved' | 'rejected'
-  kyc_documents?: string[]
-  kyc_comments?: string
-  created_at: string
-  updated_at: string
+  date_of_birth?: string
+  profile_image_base64?: string
+  kyc_status: 'pendente' | 'aprovado' | 'rejeitado'
+  credit_score?: number
+  is_admin: boolean
   is_active: boolean
+  created_at: string
+  updated_at?: string
 }
 
 export interface FrontendUser {
   id: number
   name: string
   email: string
-  kyc_status: 'pending' | 'approved' | 'rejected'
+  kyc_status: 'pendente' | 'aprovado' | 'rejeitado'
   saldo: number
   created_at: string
   hash?: string
@@ -72,15 +71,15 @@ export const userService = {
    * Atualizar dados do usuário
    */
   async updateUser(id: number, userData: Partial<{
-    name: string
+    full_name: string
     email: string
     cpf: string
-    phone: string
-    birth_date: string
-    address: string
+    date_of_birth: string
+    profile_image_base64: string
+    credit_score: number
   }>): Promise<FrontendUser> {
     try {
-      const response = await api.put(`/users/${id}`, userData)
+      const response = await api.patch(`/users/${id}`, userData)
       return this.transformBackendUser(response.data)
     } catch (error) {
       throw handleAPIError(error)
@@ -88,14 +87,11 @@ export const userService = {
   },
 
   /**
-   * Atualizar status KYC do usuário
+   * Ativar/desativar usuário
    */
-  async updateUserKycStatus(id: number, status: 'approved' | 'rejected', comments?: string): Promise<FrontendUser> {
+  async toggleUserStatus(id: number, is_active: boolean): Promise<FrontendUser> {
     try {
-      const response = await api.put(`/users/${id}/status`, {
-        kyc_status: status,
-        kyc_comments: comments
-      })
+      const response = await api.post(`/users/${id}/status`, { is_active })
       return this.transformBackendUser(response.data)
     } catch (error) {
       throw handleAPIError(error)
@@ -108,12 +104,12 @@ export const userService = {
   async uploadKycDocuments(userId: number, files: File[]): Promise<{ success: boolean; message: string }> {
     try {
       const formData = new FormData()
-      files.forEach((file, index) => {
-        formData.append(`document_${index}`, file)
+      files.forEach((file) => {
+        formData.append('files', file)
       })
       formData.append('user_id', userId.toString())
 
-      await api.post('/kyc/upload', formData, {
+      const response = await api.post('/kyc/upload', formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
@@ -121,15 +117,27 @@ export const userService = {
       
       return {
         success: true,
-        message: 'Documentos enviados com sucesso'
+        message: response.data.message || 'Documentos enviados com sucesso'
       }
     } catch (error) {
-      // Se o endpoint não existir, simular sucesso
-      console.warn('KYC upload endpoint not available:', error)
-      return {
-        success: true,
-        message: 'Documentos simulados como enviados (endpoint não implementado)'
-      }
+      throw handleAPIError(error)
+    }
+  },
+
+  /**
+   * Atualizar status KYC do usuário
+   */
+  async updateUserKycStatus(id: number, status: 'aprovado' | 'rejeitado', comments?: string): Promise<FrontendUser> {
+    try {
+      await api.post(`/kyc/update-status/${id}`, {
+        new_status: status,
+        comments: comments || ''
+      })
+      
+      // Buscar usuário atualizado
+      return await this.getUserById(id)
+    } catch (error) {
+      throw handleAPIError(error)
     }
   },
 
@@ -154,14 +162,12 @@ export const userService = {
    * Transformar dados do backend para formato esperado pelo frontend
    */
   transformBackendUser(backendUser: BackendUser): FrontendUser {
-    // Para o saldo, precisaríamos buscar a carteira, mas por simplicidade
-    // vamos usar um valor padrão e implementar a busca da carteira separadamente
     return {
       id: backendUser.id,
-      name: backendUser.name || backendUser.email.split('@')[0], // Usar parte do email se name não existir
+      name: backendUser.full_name || backendUser.email.split('@')[0],
       email: backendUser.email,
       kyc_status: backendUser.kyc_status,
-      saldo: 5000, // Saldo padrão - seria buscado da carteira em implementação completa
+      saldo: 5000, // Será buscado da carteira separadamente
       created_at: backendUser.created_at,
       hash: this.generateUserHash(backendUser)
     }
