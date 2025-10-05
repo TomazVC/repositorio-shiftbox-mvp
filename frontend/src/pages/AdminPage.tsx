@@ -1,54 +1,101 @@
 import { useState } from 'react'
 import Button from '../components/Button'
 import Icon from '../components/Icon'
+import Card from '../components/Card'
 import RevenueDistribution from '../components/RevenueDistribution'
 import FraudDetection from '../components/FraudDetection'
 import LoanApprovalWorkflow from '../components/LoanApprovalWorkflow'
-import { getDistributions } from '../data/mockData'
+import { getDistributions, mockLoanApplications } from '../data/mockData'
+import { formatCurrency } from '../utils/format'
 
 const AdminPage = () => {
-  const [activeTab, setActiveTab] = useState('distributions')
+  const [activeTab, setActiveTab] = useState('dashboard')
+  const [selectedApplications, setSelectedApplications] = useState<number[]>([])
+  const [searchTerm, setSearchTerm] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [sortBy, setSortBy] = useState('date')
 
   const tabs = [
     {
-      id: 'distributions',
-      name: 'Distribuição de Receita',
-      icon: 'dollar-sign',
-      description: 'Gerenciar distribuições para investidores'
-    },
-    {
-      id: 'fraud',
-      name: 'Detecção de Fraudes',
-      icon: 'shield',
-      description: 'Monitorar atividades suspeitas'
+      id: 'dashboard',
+      name: 'Dashboard',
+      icon: 'home',
+      description: 'Visão geral da plataforma'
     },
     {
       id: 'loans',
-      name: 'Aprovação de Empréstimos',
+      name: 'Empréstimos',
       icon: 'file-text',
-      description: 'Analisar solicitações de empréstimo'
+      description: 'Gestão de solicitações'
+    },
+    {
+      id: 'distributions',
+      name: 'Distribuições',
+      icon: 'dollar-sign',
+      description: 'Receita dos investidores'
+    },
+    {
+      id: 'fraud',
+      name: 'Segurança',
+      icon: 'shield',
+      description: 'Detecção de fraudes'
+    },
+    {
+      id: 'analytics',
+      name: 'Analytics',
+      icon: 'trending-up',
+      description: 'Relatórios e métricas'
     }
   ]
 
+  // Estados e dados
   const distributions = getDistributions()
+  const loanApplications = mockLoanApplications.filter(app => app.status === 'under_review')
+  
+  // Métricas do dashboard
+  const metrics = {
+    totalApplications: mockLoanApplications.length,
+    pendingApprovals: loanApplications.length,
+    totalValue: mockLoanApplications.reduce((sum, app) => sum + app.requested_amount, 0),
+    approvalRate: mockLoanApplications.filter(app => app.status === 'approved').length / mockLoanApplications.length * 100
+  }
+
+  // Filtrar aplicações
+  const filteredApplications = loanApplications.filter(app => {
+    const matchesSearch = app.applicant_info.company_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         app.id.toString().includes(searchTerm)
+    const matchesStatus = statusFilter === 'all' || app.status === statusFilter
+    return matchesSearch && matchesStatus
+  })
+
+  // Ações em lote
+  const handleBulkAction = (action: string) => {
+    if (selectedApplications.length === 0) {
+      alert('Selecione pelo menos uma solicitação')
+      return
+    }
+    
+    const actionText = action === 'approve' ? 'aprovar' : 'rejeitar'
+    if (confirm(`Deseja ${actionText} ${selectedApplications.length} solicitações selecionadas?`)) {
+      console.log(`Ação em lote: ${action}`, selectedApplications)
+      setSelectedApplications([])
+      alert(`${selectedApplications.length} solicitações ${actionText === 'aprovar' ? 'aprovadas' : 'rejeitadas'} com sucesso!`)
+    }
+  }
 
   const handleDistributionProcess = (distributionId: number) => {
     console.log('Processando distribuição:', distributionId)
-    // Aqui seria feita a lógica real de processamento
   }
 
   const handleEventUpdate = (eventId: number, status: string) => {
     console.log('Atualizando evento:', eventId, 'para status:', status)
-    // Aqui seria feita a lógica real de atualização
   }
 
   const handleLoanApproval = (approved: boolean, details: any) => {
     console.log('Empréstimo', approved ? 'aprovado' : 'rejeitado', details)
-    // Aqui seria feita a lógica real de aprovação/rejeição
   }
 
   const handleExportReports = () => {
-    // Gerar relatório em CSV
     const reportData = `
 Data do Relatório: ${new Date().toLocaleDateString('pt-BR')}
 
@@ -62,15 +109,8 @@ VALORES
 =======
 Total Distribuído: R$ ${distributions.filter(d => d.status === 'completed').reduce((sum, d) => sum + d.investor_amount, 0).toLocaleString()}
 Total Pendente: R$ ${distributions.filter(d => d.status === 'pending').reduce((sum, d) => sum + d.investor_amount, 0).toLocaleString()}
-
-DETALHES DAS DISTRIBUIÇÕES
-=========================
-${distributions.map(d => 
-  `#${d.id} - ${d.distribution_date} - R$ ${d.investor_amount.toLocaleString()} - ${d.status}`
-).join('\n')}
     `
 
-    // Criar e baixar arquivo
     const blob = new Blob([reportData], { type: 'text/plain;charset=utf-8' })
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
@@ -93,134 +133,299 @@ ${distributions.map(d =>
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-6">
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Painel Administrativo</h1>
-        <p className="text-gray-600">Gestão completa da plataforma de investimentos</p>
-      </div>
-
-      {/* Navigation Tabs */}
-      <div className="border-b border-gray-200 mb-8">
-        <nav className="-mb-px flex space-x-8">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`group inline-flex items-center py-4 px-1 border-b-2 font-medium text-sm ${
-                activeTab === tab.id
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              <Icon 
-                name={tab.icon as any} 
-                className={`mr-2 w-5 h-5 ${
-                  activeTab === tab.id ? 'text-blue-500' : 'text-gray-400 group-hover:text-gray-500'
-                }`}
-              />
-              <span>{tab.name}</span>
-            </button>
-          ))}
-        </nav>
-      </div>
-
-      {/* Tab Content */}
-      <div className="space-y-6">
-        {activeTab === 'distributions' && (
-          <div>
-            <div className="mb-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-2">Distribuição de Receita</h2>
-              <p className="text-gray-600">
-                Gerencie as distribuições de juros e receitas para os investidores da plataforma.
-              </p>
-            </div>
-            <RevenueDistribution 
-              distributions={distributions}
-              onDistribute={handleDistributionProcess}
-            />
-          </div>
-        )}
-
-        {activeTab === 'fraud' && (
-          <div>
-            <div className="mb-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-2">Detecção de Fraudes</h2>
-              <p className="text-gray-600">
-                Monitore e investigue atividades suspeitas em toda a plataforma.
-              </p>
-            </div>
-            <FraudDetection onEventUpdate={handleEventUpdate} />
-          </div>
-        )}
-
-        {activeTab === 'loans' && (
-          <div>
-            <div className="mb-6 flex items-center justify-between">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+      <div className="max-w-7xl mx-auto p-6">
+        {/* Header */}
+        <div className="mb-8">
+          <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 rounded-2xl p-8 text-white">
+            <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-xl font-semibold text-gray-900 mb-2">Aprovação de Empréstimos</h2>
+                <h1 className="text-4xl font-bold mb-3">Painel Administrativo</h1>
+                <p className="text-blue-100 text-lg">Gestão completa da plataforma ShiftBox</p>
+              </div>
+              <div className="text-right">
+                <div className="text-sm text-blue-100 mb-1">Última atualização</div>
+                <div className="text-lg font-semibold">{new Date().toLocaleTimeString('pt-BR')}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Navigation Tabs */}
+        <div className="mb-8">
+          <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-2">
+            <nav className="flex space-x-2">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex-1 flex items-center justify-center py-3 px-4 rounded-xl font-semibold text-sm transition-all duration-300 ${
+                    activeTab === tab.id
+                      ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  }`}
+                >
+                  <Icon 
+                    name={tab.icon as any} 
+                    className={`mr-2 w-5 h-5 ${
+                      activeTab === tab.id ? 'text-white' : 'text-gray-400'
+                    }`}
+                  />
+                  <span>{tab.name}</span>
+                </button>
+              ))}
+            </nav>
+          </div>
+        </div>
+
+        {/* Tab Content */}
+        <div className="space-y-8">
+          {activeTab === 'dashboard' && (
+            <div className="space-y-8">
+              {/* Métricas principais */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
+                  <div className="p-6">
+                    <div className="flex items-center gap-3">
+                      <div className="p-3 bg-blue-100 rounded-xl">
+                        <Icon name="file-text" className="w-6 h-6 text-blue-600" />
+                      </div>
+                      <div>
+                        <p className="text-sm text-blue-600 font-medium">Total de Solicitações</p>
+                        <p className="text-2xl font-bold text-blue-800">{metrics.totalApplications}</p>
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+
+                <Card className="bg-gradient-to-br from-amber-50 to-orange-50 border-amber-200">
+                  <div className="p-6">
+                    <div className="flex items-center gap-3">
+                      <div className="p-3 bg-amber-100 rounded-xl">
+                        <Icon name="clock" className="w-6 h-6 text-amber-600" />
+                      </div>
+                      <div>
+                        <p className="text-sm text-amber-600 font-medium">Aguardando Aprovação</p>
+                        <p className="text-2xl font-bold text-amber-800">{metrics.pendingApprovals}</p>
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+
+                <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
+                  <div className="p-6">
+                    <div className="flex items-center gap-3">
+                      <div className="p-3 bg-green-100 rounded-xl">
+                        <Icon name="dollar-sign" className="w-6 h-6 text-green-600" />
+                      </div>
+                      <div>
+                        <p className="text-sm text-green-600 font-medium">Volume Total</p>
+                        <p className="text-2xl font-bold text-green-800">{formatCurrency(metrics.totalValue)}</p>
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+
+                <Card className="bg-gradient-to-br from-purple-50 to-violet-50 border-purple-200">
+                  <div className="p-6">
+                    <div className="flex items-center gap-3">
+                      <div className="p-3 bg-purple-100 rounded-xl">
+                        <Icon name="trending-up" className="w-6 h-6 text-purple-600" />
+                      </div>
+                      <div>
+                        <p className="text-sm text-purple-600 font-medium">Taxa de Aprovação</p>
+                        <p className="text-2xl font-bold text-purple-800">{metrics.approvalRate.toFixed(1)}%</p>
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              </div>
+
+              {/* Ações rápidas */}
+              <Card className="bg-gradient-to-br from-gray-50 to-slate-50">
+                <div className="p-8">
+                  <h3 className="text-xl font-bold text-gray-900 mb-6">Ações Rápidas</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <Button 
+                      onClick={handleExportReports}
+                      className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white py-4 rounded-xl font-semibold"
+                    >
+                      <Icon name="download" className="w-5 h-5 mr-3" />
+                      Exportar Relatórios
+                    </Button>
+                    <Button 
+                      onClick={handleShowSettings}
+                      className="bg-gradient-to-r from-gray-500 to-slate-600 hover:from-gray-600 hover:to-slate-700 text-white py-4 rounded-xl font-semibold"
+                    >
+                      <Icon name="settings" className="w-5 h-5 mr-3" />
+                      Configurações
+                    </Button>
+                    <Button 
+                      onClick={handleShowNotifications}
+                      className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white py-4 rounded-xl font-semibold"
+                    >
+                      <Icon name="bell" className="w-5 h-5 mr-3" />
+                      Notificações
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            </div>
+          )}
+
+          {activeTab === 'loans' && (
+            <div className="space-y-6">
+              {/* Controles de filtro e busca */}
+              <Card className="bg-white shadow-lg">
+                <div className="p-6">
+                  <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
+                    <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Buscar</label>
+                        <div className="relative">
+                          <Icon name="search" className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                          <input
+                            type="text"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            placeholder="ID ou empresa..."
+                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                        <select
+                          value={statusFilter}
+                          onChange={(e) => setStatusFilter(e.target.value)}
+                          className="w-full py-2 px-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                          <option value="all">Todos</option>
+                          <option value="under_review">Em Análise</option>
+                          <option value="pending">Pendente</option>
+                          <option value="approved">Aprovado</option>
+                          <option value="rejected">Rejeitado</option>
+                        </select>
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Ordenar por</label>
+                        <select
+                          value={sortBy}
+                          onChange={(e) => setSortBy(e.target.value)}
+                          className="w-full py-2 px-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                          <option value="date">Data</option>
+                          <option value="amount">Valor</option>
+                          <option value="risk">Risco</option>
+                        </select>
+                      </div>
+                    </div>
+                    
+                    {/* Ações em lote */}
+                    {selectedApplications.length > 0 && (
+                      <div className="flex gap-2">
+                        <Button 
+                          onClick={() => handleBulkAction('approve')}
+                          className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium"
+                        >
+                          <Icon name="check" className="w-4 h-4 mr-2" />
+                          Aprovar ({selectedApplications.length})
+                        </Button>
+                        <Button 
+                          onClick={() => handleBulkAction('reject')}
+                          className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium"
+                        >
+                          <Icon name="x" className="w-4 h-4 mr-2" />
+                          Rejeitar ({selectedApplications.length})
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </Card>
+
+              {/* Lista de aplicações */}
+              <div className="space-y-6">
+                {filteredApplications.map((app) => (
+                  <div key={app.id} className="relative">
+                    <div className="absolute top-4 left-4 z-10">
+                      <input
+                        type="checkbox"
+                        checked={selectedApplications.includes(app.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedApplications([...selectedApplications, app.id])
+                          } else {
+                            setSelectedApplications(selectedApplications.filter(id => id !== app.id))
+                          }
+                        }}
+                        className="w-5 h-5 text-blue-600 bg-white border-2 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                    </div>
+                    <LoanApprovalWorkflow 
+                      applicationId={app.id}
+                      onApprovalChange={handleLoanApproval}
+                      className="pl-12"
+                    />
+                  </div>
+                ))}
+                
+                {filteredApplications.length === 0 && (
+                  <Card className="p-12 text-center">
+                    <Icon name="search" className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">Nenhuma solicitação encontrada</h3>
+                    <p className="text-gray-600">
+                      Ajuste os filtros ou termos de busca para encontrar solicitações
+                    </p>
+                  </Card>
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'distributions' && (
+            <div>
+              <div className="mb-6">
+                <h2 className="text-xl font-semibold text-gray-900 mb-2">Distribuição de Receita</h2>
                 <p className="text-gray-600">
-                  Analise e aprove/rejeite solicitações de empréstimo com base na análise de risco.
+                  Gerencie as distribuições de juros e receitas para os investidores da plataforma.
                 </p>
               </div>
-              <div className="flex gap-3">
-                <Button variant="secondary" size="sm">
-                  <Icon name="filter" className="w-4 h-4 mr-2" />
-                  Filtros
-                </Button>
-                <Button size="sm">
-                  <Icon name="download" className="w-4 h-4 mr-2" />
-                  Relatório
-                </Button>
-              </div>
-            </div>
-
-            {/* Lista de aplicações para aprovação */}
-            <div className="grid gap-6">
-              {/* Aplicação 1 - Em análise */}
-              <LoanApprovalWorkflow 
-                applicationId={1}
-                onApprovalChange={handleLoanApproval}
+              <RevenueDistribution 
+                distributions={distributions}
+                onDistribute={handleDistributionProcess}
               />
-              
-              {/* Aplicação 3 - Em análise (a 2 já foi aprovada) */}
-              {/* <LoanApprovalWorkflow 
-                applicationId={3}
-                onApprovalChange={handleLoanApproval}
-              /> */}
             </div>
-          </div>
-        )}
-      </div>
+          )}
 
-      {/* Quick Actions */}
-      <div className="mt-12 bg-gray-50 rounded-lg p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Ações Rápidas</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Button 
-            variant="secondary" 
-            className="flex items-center justify-center"
-            onClick={handleExportReports}
-          >
-            <Icon name="download" className="w-4 h-4 mr-2" />
-            Exportar Relatórios
-          </Button>
-          <Button 
-            variant="secondary" 
-            className="flex items-center justify-center"
-            onClick={handleShowSettings}
-          >
-            <Icon name="settings" className="w-4 h-4 mr-2" />
-            Configurações
-          </Button>
-          <Button 
-            variant="secondary" 
-            className="flex items-center justify-center"
-            onClick={handleShowNotifications}
-          >
-            <Icon name="bell" className="w-4 h-4 mr-2" />
-            Notificações
-          </Button>
+          {activeTab === 'fraud' && (
+            <div>
+              <div className="mb-6">
+                <h2 className="text-xl font-semibold text-gray-900 mb-2">Detecção de Fraudes</h2>
+                <p className="text-gray-600">
+                  Monitore e investigue atividades suspeitas em toda a plataforma.
+                </p>
+              </div>
+              <FraudDetection onEventUpdate={handleEventUpdate} />
+            </div>
+          )}
+
+          {activeTab === 'analytics' && (
+            <Card className="p-8 text-center">
+              <Icon name="trending-up" className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-xl font-bold text-gray-900 mb-2">Analytics Avançado</h3>
+              <p className="text-gray-600 mb-6">
+                Módulo de analytics em desenvolvimento. Em breve você terá acesso a relatórios detalhados, 
+                métricas de performance e análises preditivas.
+              </p>
+              <Button className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white">
+                <Icon name="bell" className="w-4 h-4 mr-2" />
+                Notificar quando disponível
+              </Button>
+            </Card>
+          )}
         </div>
       </div>
     </div>

@@ -73,6 +73,28 @@ const LoansPage = ({ currentUserId = 1, isAdmin = false }: LoansPageProps) => {
   const [lastSimulation, setLastSimulation] = useState<LoanSimulation | null>(null)
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [sortOrder, setSortOrder] = useState<string>('newest')
+  const [showNotification, setShowNotification] = useState(false)
+  const [notificationData, setNotificationData] = useState<{
+    title: string
+    message: string
+    applicationId: number
+    amount: number
+  } | null>(null)
+
+  const showSuccessNotification = (applicationId: number, amount: number) => {
+    setNotificationData({
+      title: 'Solicitação Enviada com Sucesso!',
+      message: 'Sua solicitação foi transferida para análise administrativa',
+      applicationId,
+      amount
+    })
+    setShowNotification(true)
+    
+    // Auto-ocultar após 8 segundos
+    setTimeout(() => {
+      setShowNotification(false)
+    }, 8000)
+  }
 
   useEffect(() => {
     loadUserApplications()
@@ -112,27 +134,46 @@ const LoansPage = ({ currentUserId = 1, isAdmin = false }: LoansPageProps) => {
       requested_amount: simulation.amount,
       duration_months: simulation.duration_months,
       purpose: 'capital_giro', // Valor padrão, seria obtido do formulário
-      status: 'pending',
+      status: 'under_review', // Automaticamente em análise para ir para o painel administrativo
       proposed_interest_rate: simulation.interest_rate,
       application_date: new Date().toISOString().split('T')[0],
       applicant_info: {
         document: '000.000.000-00', // Seria obtido do perfil do usuário
         monthly_income: 10000, // Seria obtido do perfil do usuário
         company_name: 'Empresa Exemplo' // Seria obtido do perfil do usuário
+      },
+      // Adicionar análise de risco automática para que apareça no painel administrativo
+      risk_analysis: {
+        score: Math.random() * 0.4 + 0.6, // Score aleatório entre 0.6 e 1.0
+        risk_level: simulation.interest_rate <= 2.5 ? 'low' : simulation.interest_rate <= 3.0 ? 'medium' : 'high',
+        factors: {
+          income_verification: Math.random() * 0.3 + 0.7,
+          credit_history: Math.random() * 0.4 + 0.6,
+          debt_to_income: Math.random() * 0.5 + 0.3,
+          employment_stability: Math.random() * 0.3 + 0.7,
+          collateral_value: Math.random() * 0.3 + 0.4,
+          positive: ['Simulação realizada', 'Valores dentro do limite', 'Perfil compatível'],
+          negative: simulation.interest_rate > 3.0 ? ['Taxa elevada solicitada', 'Primeiro empréstimo'] : ['Primeiro empréstimo']
+        },
+        recommendations: [
+          'Verificar documentação completa',
+          'Confirmar dados bancários',
+          'Validar renda declarada'
+        ]
       }
     }
 
-    // Adicionar à lista de aplicações
+    // Adicionar à lista global de aplicações (para aparecer no painel administrativo)
     mockLoanApplications.push(newApplication)
     
-    // Atualizar lista local
+    // Atualizar lista local do usuário
     setUserApplications(prev => [...prev, newApplication])
     
     // Mudar para a aba de aplicações
     setActiveTab('applications')
     
-    // Mostrar sucesso
-    alert(`Solicitação criada com sucesso!\nNúmero: #${newApplication.id}\nValor: ${formatCurrency(simulation.amount)}\nStatus: Pendente`)
+    // Mostrar notificação de sucesso
+    showSuccessNotification(newApplication.id, simulation.amount)
   }
 
   const handleApprovalChange = (approved: boolean) => {
@@ -431,8 +472,16 @@ const LoansPage = ({ currentUserId = 1, isAdmin = false }: LoansPageProps) => {
                           />
                           {application.status === 'approved' ? 'Aprovado' :
                            application.status === 'rejected' ? 'Rejeitado' :
-                           application.status === 'under_review' ? 'Em Análise' : 'Pendente'}
+                           application.status === 'under_review' ? 'Em Análise Administrativa' : 'Pendente'}
                         </div>
+                        
+                        {/* Indicador de Transferência para Análise */}
+                        {application.status === 'under_review' && (
+                          <div className="px-3 py-1 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg text-xs text-blue-700 font-medium flex items-center gap-1 mt-2">
+                            <Icon name="arrow-right" className="w-3 h-3" />
+                            Transferida para painel administrativo
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -649,6 +698,50 @@ const LoansPage = ({ currentUserId = 1, isAdmin = false }: LoansPageProps) => {
           </Card>
         )}
       </div>
+
+      {/* Notificação de Sucesso */}
+      {showNotification && notificationData && (
+        <div className="fixed bottom-6 right-6 z-50 animate-in slide-in-from-bottom-4 duration-500">
+          <div className="bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-2xl shadow-2xl border border-green-400 max-w-md">
+            <div className="p-6">
+              <div className="flex items-start gap-4">
+                <div className="p-2 bg-white/20 rounded-xl backdrop-blur-sm">
+                  <Icon name="check-circle" className="w-6 h-6 text-white" />
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-bold text-lg mb-1">{notificationData.title}</h4>
+                  <p className="text-green-100 text-sm mb-3">{notificationData.message}</p>
+                  
+                  <div className="bg-white/10 rounded-lg p-3 backdrop-blur-sm">
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <p className="text-green-200">Solicitação</p>
+                        <p className="font-semibold">#{notificationData.applicationId}</p>
+                      </div>
+                      <div>
+                        <p className="text-green-200">Valor</p>
+                        <p className="font-semibold">{formatCurrency(notificationData.amount)}</p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-2 mt-4 text-sm">
+                    <Icon name="arrow-right" className="w-4 h-4 text-green-200" />
+                    <span className="text-green-100">Transferida para análise administrativa</span>
+                  </div>
+                </div>
+                
+                <button
+                  onClick={() => setShowNotification(false)}
+                  className="p-1 hover:bg-white/20 rounded-lg transition-colors"
+                >
+                  <Icon name="x" className="w-5 h-5 text-white" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
