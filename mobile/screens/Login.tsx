@@ -1,11 +1,11 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
+  ScrollView,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
@@ -25,32 +25,39 @@ export default function Login({ navigation }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert('Erro', 'Preencha todos os campos');
+      setErrorMessage('Preencha e-mail e senha.');
       return;
     }
 
     setLoading(true);
+    setErrorMessage('');
+
     try {
       await authService.login({ email, password });
-      navigation.replace('Dashboard');
+      navigation.replace('MainTabs');
     } catch (error: any) {
-      Alert.alert('Erro', error.message || 'Erro ao fazer login');
+      setErrorMessage(error.message || 'Não foi possível fazer o login.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <View style={styles.container}>
+    <ScrollView
+      style={styles.wrapper}
+      contentContainerStyle={styles.scrollContent}
+      keyboardShouldPersistTaps="handled"
+    >
       <View style={styles.content}>
         <Text style={styles.title}>ShiftBox</Text>
-        <Text style={styles.subtitle}>Carteira Digital</Text>
+        <Text style={styles.subtitle}>Carteira digital conectada ao pool</Text>
 
         <View style={styles.form}>
-          <Text style={styles.label}>Email</Text>
+          <Text style={styles.label}>E-mail</Text>
           <TextInput
             style={styles.input}
             placeholder="seu@email.com"
@@ -64,12 +71,14 @@ export default function Login({ navigation }: Props) {
           <Text style={styles.label}>Senha</Text>
           <TextInput
             style={styles.input}
-            placeholder="••••••••"
+            placeholder="********"
             placeholderTextColor={COLORS.PLACEHOLDER}
             value={password}
             onChangeText={setPassword}
             secureTextEntry
           />
+
+          {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
 
           <TouchableOpacity
             style={[styles.button, loading && styles.buttonDisabled]}
@@ -85,30 +94,32 @@ export default function Login({ navigation }: Props) {
             onPress={() => navigation.navigate('Register')}
             style={styles.linkContainer}
           >
-            <Text style={styles.linkText}>
-              Não tem conta? Cadastre-se
-            </Text>
+            <Text style={styles.linkText}>Não tem conta? Cadastre-se</Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.testCredentials}>
           <Text style={styles.testText}>Credenciais de teste:</Text>
-          <Text style={styles.testEmail}>user@shiftbox.com / user123</Text>
+          <Text style={styles.testEmail}>joao@example.com / senha123</Text>
+          <Text style={styles.testEmail}>maria@example.com / senha123</Text>
         </View>
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  wrapper: {
     flex: 1,
     backgroundColor: COLORS.BG_SCREEN,
   },
-  content: {
-    flex: 1,
+  scrollContent: {
+    // flexGrow: 1,
     justifyContent: 'center',
     padding: SPACING.LG,
+  },
+  content: {
+    gap: SPACING['2XL'],
   },
   title: {
     fontSize: FONT_SIZES.TITLE_MAIN,
@@ -127,13 +138,13 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.BG_CARD,
     borderRadius: COMPONENTS.CARD_RADIUS,
     padding: SPACING.LG,
+    gap: SPACING.SM,
     ...COMPONENTS.CARD_SHADOW,
   },
   label: {
     fontSize: FONT_SIZES.SM,
     fontWeight: '600',
     color: COLORS.TEXT_PRIMARY,
-    marginBottom: SPACING.SM,
   },
   input: {
     height: COMPONENTS.INPUT_HEIGHT,
@@ -142,8 +153,12 @@ const styles = StyleSheet.create({
     borderRadius: COMPONENTS.INPUT_RADIUS,
     paddingHorizontal: SPACING.BASE,
     fontSize: FONT_SIZES.BODY,
-    marginBottom: SPACING.BASE,
     color: COLORS.TEXT_PRIMARY,
+  },
+  errorText: {
+    color: COLORS.ERROR,
+    fontSize: FONT_SIZES.SM,
+    marginTop: SPACING.XS,
   },
   button: {
     backgroundColor: COLORS.PRIMARY,
@@ -171,8 +186,8 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   testCredentials: {
-    marginTop: SPACING.LG,
     alignItems: 'center',
+    gap: SPACING.XS,
   },
   testText: {
     fontSize: FONT_SIZES.AUXILIARY,
@@ -182,6 +197,5 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.XS,
     color: COLORS.TEXT_SECONDARY,
     fontFamily: 'monospace',
-    marginTop: SPACING.XS,
   },
 });

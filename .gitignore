@@ -11,6 +11,7 @@ backend/.env
 *.egg-info/
 dist/
 build/
+backend/.venv
 
 # Node
 node_modules/
@@ -61,7 +62,7 @@ logs/
 .env
 .env.local
 .env.production
-
+.venv
 # Docker
 docker-compose.override.yml
 

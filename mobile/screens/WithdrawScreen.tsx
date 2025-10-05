@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef, useState } from 'react';
+﻿import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -12,19 +12,19 @@ import {
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { RootStackParamList, PoolStatus } from '../types';
+import { RootStackParamList, Loan } from '../types';
 import { authService } from '../services/authService';
 import { walletService } from '../services/walletService';
-import { poolService } from '../services/poolService';
+import { loanService } from '../services/loanService';
 import { COLORS, FONT_SIZES, SPACING, COMPONENTS, CURRENCY } from '../constants';
 
-type InvestScreenNavigationProp = NativeStackNavigationProp<
+type WithdrawScreenNavigationProp = NativeStackNavigationProp<
   RootStackParamList,
-  'Invest'
+  'Withdraw'
 >;
 
 type Props = {
-  navigation: InvestScreenNavigationProp;
+  navigation: WithdrawScreenNavigationProp;
 };
 
 type FeedbackState = {
@@ -32,12 +32,12 @@ type FeedbackState = {
   message: string;
 };
 
-export default function InvestScreen({ navigation }: Props) {
+export default function WithdrawScreen({ navigation }: Props) {
   const [amount, setAmount] = useState('');
   const [loading, setLoading] = useState(false);
+  const [walletId, setWalletId] = useState<number | null>(null);
   const [walletBalance, setWalletBalance] = useState(0);
-  const [poolStatus, setPoolStatus] = useState<PoolStatus | null>(null);
-  const [userId, setUserId] = useState<number | null>(null);
+  const [loans, setLoans] = useState<Loan[]>([]);
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
   const redirectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -56,15 +56,15 @@ export default function InvestScreen({ navigation }: Props) {
       if (!user?.id) {
         throw new Error('Não foi possível identificar o usuário.');
       }
-      setUserId(user.id);
 
       const wallet = await walletService.getWalletByUser(user.id);
+      setWalletId(wallet.id);
       setWalletBalance(wallet.saldo);
 
-      const pool = await poolService.getPoolStatus();
-      setPoolStatus(pool);
+      const userLoans = await loanService.getLoans({ userId: user.id });
+      setLoans(userLoans);
     } catch (error: any) {
-      console.warn('Erro ao carregar contexto de investimento:', error);
+      console.warn('Erro ao carregar dados de saque:', error);
       Alert.alert('Erro', error.message || 'Não foi possível carregar os dados.');
     }
   };
@@ -75,49 +75,60 @@ export default function InvestScreen({ navigation }: Props) {
       currency: 'BRL',
     }).format(value);
 
-  const handleInvest = async () => {
-    const investAmount = Number.parseFloat(amount.replace(',', '.'));
+  const outstandingLoanAmount = useMemo(() => {
+    return loans
+      .filter((loan) => ['pendente', 'ativo'].includes(loan.status))
+      .reduce((total, loan) => {
+        const totalWithInterest = loan.valor * (1 + (loan.taxa_juros ?? 0));
+        const remaining = totalWithInterest - loan.valor_pago;
+        return total + Math.max(remaining, 0);
+      }, 0);
+  }, [loans]);
+
+  const projectedBalance = useMemo(() => {
+    const value = Number.parseFloat(amount.replace(',', '.'));
+    if (Number.isNaN(value)) {
+      return walletBalance;
+    }
+    return walletBalance - value;
+  }, [amount, walletBalance]);
+
+  const suggestedWithdrawals = useMemo(() => {
+    if (walletBalance <= 0) {
+      return [] as number[];
+    }
+    const raw = [0.25, 0.5, 1].map((ratio) => parseFloat((walletBalance * ratio).toFixed(2)));
+    const unique = Array.from(new Set(raw)).filter((value) => value > 0);
+    return unique;
+  }, [walletBalance]);
+
+  const handleWithdraw = async () => {
+    const withdrawAmount = Number.parseFloat(amount.replace(',', '.'));
     setFeedback(null);
 
-    if (!amount || Number.isNaN(investAmount) || investAmount <= 0) {
-      setFeedback({ type: 'error', message: 'Informe um valor válido para investir.' });
+    if (!amount || Number.isNaN(withdrawAmount) || withdrawAmount <= 0) {
+      setFeedback({ type: 'error', message: 'Informe um valor válido para sacar.' });
       return;
     }
 
-    if (investAmount < CURRENCY.MIN_INVESTMENT) {
-      setFeedback({
-        type: 'error',
-        message: `Valor mínimo: ${formatCurrency(CURRENCY.MIN_INVESTMENT)}.`,
-      });
+    if (!walletId) {
+      setFeedback({ type: 'error', message: 'Carteira não localizada.' });
       return;
     }
 
-    if (investAmount > CURRENCY.MAX_INVESTMENT) {
-      setFeedback({
-        type: 'error',
-        message: `Valor máximo: ${formatCurrency(CURRENCY.MAX_INVESTMENT)}.`,
-      });
-      return;
-    }
-
-    if (investAmount > walletBalance) {
-      setFeedback({ type: 'error', message: 'Saldo insuficiente para esta aplicação.' });
-      return;
-    }
-
-    if (!userId) {
-      setFeedback({ type: 'error', message: 'Não foi possível identificar o usuário.' });
+    if (withdrawAmount > walletBalance) {
+      setFeedback({ type: 'error', message: 'Saldo insuficiente para o saque solicitado.' });
       return;
     }
 
     setLoading(true);
     try {
-      await walletService.invest({ userId, amount: investAmount });
+      await walletService.withdraw({ walletId, amount: withdrawAmount });
       await loadContext();
       setAmount('');
       setFeedback({
         type: 'success',
-        message: `Investimento de ${formatCurrency(investAmount)} registrado com sucesso.`,
+        message: `Saque de ${formatCurrency(withdrawAmount)} solicitado. O valor será transferido para sua conta cadastrada.`,
       });
 
       redirectTimeoutRef.current = setTimeout(() => {
@@ -126,14 +137,12 @@ export default function InvestScreen({ navigation }: Props) {
     } catch (error: any) {
       setFeedback({
         type: 'error',
-        message: error.message || 'Não foi possível concluir o investimento.',
+        message: error.message || 'Não foi possível concluir o saque.',
       });
     } finally {
       setLoading(false);
     }
   };
-
-  const suggestedAmounts = [100, 500, 1000, 5000];
 
   return (
     <KeyboardAvoidingView
@@ -150,39 +159,34 @@ export default function InvestScreen({ navigation }: Props) {
             <MaterialCommunityIcons name="arrow-left" size={22} color={COLORS.PRIMARY} />
             <Text style={styles.backButtonText}>Voltar</Text>
           </TouchableOpacity>
-          <Text style={styles.title}>Investir no pool</Text>
+          <Text style={styles.title}>Solicitar saque</Text>
         </View>
 
         <View style={styles.content}>
           <View style={styles.balanceCard}>
             <Text style={styles.balanceLabel}>Saldo disponível</Text>
             <Text style={styles.balanceValue}>{formatCurrency(walletBalance)}</Text>
+            {amount ? (
+              <Text style={styles.projectedLabel}>
+                Saldo após saque: {formatCurrency(projectedBalance)}
+              </Text>
+            ) : null}
           </View>
 
-          {poolStatus && (
-            <View style={styles.poolCard}>
-              <Text style={styles.poolTitle}>Status do pool</Text>
-              <View style={styles.poolInfo}>
-                <View style={styles.poolItem}>
-                  <Text style={styles.poolLabel}>Total</Text>
-                  <Text style={styles.poolValue}>{formatCurrency(poolStatus.saldo_total)}</Text>
-                </View>
-                <View style={styles.poolItem}>
-                  <Text style={styles.poolLabel}>Disponível</Text>
-                  <Text style={styles.poolValue}>{formatCurrency(poolStatus.saldo_disponivel)}</Text>
-                </View>
-                <View style={styles.poolItem}>
-                  <Text style={styles.poolLabel}>Utilização</Text>
-                  <Text style={styles.poolValue}>
-                    {poolStatus.percentual_utilizacao.toFixed(1)}%
-                  </Text>
-                </View>
+          {outstandingLoanAmount > 0 && (
+            <View style={styles.loanAlert}>
+              <MaterialCommunityIcons name="shield-alert" size={20} color={COLORS.WARNING} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.loanAlertTitle}>Empréstimos ativos</Text>
+                <Text style={styles.loanAlertText}>
+                  Você possui {formatCurrency(outstandingLoanAmount)} em empréstimos pendentes. Garanta saldo para as próximas parcelas antes de sacar.
+                </Text>
               </View>
             </View>
           )}
 
           <View style={styles.form}>
-            <Text style={styles.formTitle}>Quanto deseja aplicar?</Text>
+            <Text style={styles.formTitle}>Quanto deseja sacar?</Text>
 
             {feedback && (
               <View
@@ -214,29 +218,31 @@ export default function InvestScreen({ navigation }: Props) {
               />
             </View>
 
-            <View style={styles.suggestedContainer}>
-              <Text style={styles.suggestedLabel}>Sugestões rápidas</Text>
-              <View style={styles.suggestedButtonsRow}>
-                {suggestedAmounts.map((value) => (
-                  <TouchableOpacity
-                    key={value}
-                    style={styles.suggestedButton}
-                    onPress={() => setAmount(String(value))}
-                  >
-                    <Text style={styles.suggestedButtonText}>
-                      {formatCurrency(value).replace(/\u00a0/g, ' ')}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+            {suggestedWithdrawals.length > 0 && (
+              <View style={styles.suggestedContainer}>
+                <Text style={styles.suggestedLabel}>Sugestões com base no seu saldo</Text>
+                <View style={styles.suggestedButtonsRow}>
+                  {suggestedWithdrawals.map((value) => (
+                    <TouchableOpacity
+                      key={value}
+                      style={styles.suggestedButton}
+                      onPress={() => setAmount(String(value))}
+                    >
+                      <Text style={styles.suggestedButtonText}>
+                        {formatCurrency(value).replace(/\u00a0/g, ' ')}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               </View>
-            </View>
+            )}
 
             <TouchableOpacity
               style={[styles.button, loading && styles.buttonDisabled]}
-              onPress={handleInvest}
+              onPress={handleWithdraw}
               disabled={loading}
             >
-              <Text style={styles.buttonText}>{loading ? 'Aplicando...' : 'Confirmar investimento'}</Text>
+              <Text style={styles.buttonText}>{loading ? 'Processando...' : 'Confirmar saque'}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -290,6 +296,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.BG_CARD,
     borderRadius: COMPONENTS.CARD_RADIUS,
     padding: SPACING.LG,
+    gap: SPACING.SM,
     ...COMPONENTS.CARD_SHADOW,
   },
   balanceLabel: {
@@ -301,35 +308,30 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.TEXT_PRIMARY,
   },
-  poolCard: {
-    backgroundColor: COLORS.BG_CARD,
-    borderRadius: COMPONENTS.CARD_RADIUS,
-    padding: SPACING.LG,
-    ...COMPONENTS.CARD_SHADOW,
-  },
-  poolTitle: {
-    fontSize: FONT_SIZES.BODY,
-    fontWeight: '600',
-    color: COLORS.TEXT_PRIMARY,
-    marginBottom: SPACING.BASE,
-  },
-  poolInfo: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  poolItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  poolLabel: {
+  projectedLabel: {
     fontSize: FONT_SIZES.SM,
     color: COLORS.TEXT_SECONDARY,
-    marginBottom: SPACING.XS,
   },
-  poolValue: {
-    fontSize: FONT_SIZES.LG,
+  loanAlert: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SPACING.SM,
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+    borderRadius: COMPONENTS.INPUT_RADIUS,
+    padding: SPACING.BASE,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.25)',
+  },
+  loanAlertTitle: {
+    fontSize: FONT_SIZES.SM,
     fontWeight: '600',
     color: COLORS.TEXT_PRIMARY,
+    marginBottom: 2,
+  },
+  loanAlertText: {
+    fontSize: FONT_SIZES.SM,
+    color: COLORS.TEXT_SECONDARY,
+    lineHeight: 18,
   },
   form: {
     backgroundColor: COLORS.BG_CARD,

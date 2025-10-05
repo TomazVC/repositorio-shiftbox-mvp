@@ -4,6 +4,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
+from app.api.auth import get_current_user
 from app.db import get_db
 from app.models import Investment, Loan, User, Wallet
 from app.schemas import (
@@ -30,6 +31,7 @@ async def list_users(
     limit: int = 100,
     is_active: Optional[bool] = None,
     db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
 ) -> List[User]:
     query = db.query(User)
     if is_active is not None:
@@ -38,12 +40,23 @@ async def list_users(
 
 
 @router.get("/{user_id}", response_model=UserResponse)
-async def get_user(user_id: int, db: Session = Depends(get_db)) -> User:
+async def get_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> User:
     return _get_user_or_404(db, user_id)
 
 
 @router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def create_user(payload: UserCreate, db: Session = Depends(get_db)) -> User:
+async def create_user(
+    payload: UserCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> User:
+    if not current_user.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Apenas administradores podem criar usuarios")
+
     existing_email = db.query(User).filter(User.email == payload.email).first()
     if existing_email:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email ja cadastrado")
@@ -78,7 +91,12 @@ async def create_user(payload: UserCreate, db: Session = Depends(get_db)) -> Use
 
 
 @router.patch("/{user_id}", response_model=UserResponse)
-async def update_user(user_id: int, payload: UserUpdate, db: Session = Depends(get_db)) -> User:
+async def update_user(
+    user_id: int,
+    payload: UserUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> User:
     user = _get_user_or_404(db, user_id)
 
     update_data = payload.model_dump(exclude_unset=True)
@@ -102,7 +120,15 @@ async def update_user(user_id: int, payload: UserUpdate, db: Session = Depends(g
 
 
 @router.post("/{user_id}/status", response_model=UserResponse)
-async def toggle_user_status(user_id: int, payload: UserStatusUpdate, db: Session = Depends(get_db)) -> User:
+async def toggle_user_status(
+    user_id: int,
+    payload: UserStatusUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> User:
+    if not current_user.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Apenas administradores podem alterar status")
+
     user = _get_user_or_404(db, user_id)
     user.is_active = payload.is_active
     db.add(user)
@@ -112,7 +138,14 @@ async def toggle_user_status(user_id: int, payload: UserStatusUpdate, db: Sessio
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_user(user_id: int, db: Session = Depends(get_db)) -> Response:
+async def delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Response:
+    if not current_user.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Apenas administradores podem remover usuarios")
+
     user = _get_user_or_404(db, user_id)
 
     active_investments = (
@@ -128,7 +161,7 @@ async def delete_user(user_id: int, db: Session = Depends(get_db)) -> Response:
 
     active_loans = (
         db.query(Loan)
-        .filter(Loan.user_id == user_id, Loan.status.in_(["pendente", "ativo"]))
+        .filter(Loan.user_id == user_id, Loan.status.in_(["pendente", "ativo", "fila"]))
         .count()
     )
     if active_loans:

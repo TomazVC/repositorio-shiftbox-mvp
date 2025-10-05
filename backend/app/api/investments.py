@@ -1,13 +1,23 @@
 ﻿"""Investment API routes."""
 from datetime import datetime
+from decimal import Decimal
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
+from app.api.auth import get_current_user
 from app.db import get_db
 from app.models import Investment, Transaction, User, Wallet
-from app.schemas import InvestmentCreate, InvestmentResponse, InvestmentUpdate
+from app.schemas import (
+    InvestmentCreate,
+    InvestmentPreviewRequest,
+    InvestmentPreviewResponse,
+    InvestmentResponse,
+    InvestmentUpdate,
+)
+from app.services.finance_service import calculate_investment_preview
+from app.services.pool_service import process_loan_queue
 
 router = APIRouter(prefix="/investments", tags=["investments"])
 
@@ -19,12 +29,40 @@ def _get_investment_or_404(db: Session, investment_id: int) -> Investment:
     return investment
 
 
+@router.post("/preview", response_model=InvestmentPreviewResponse)
+async def preview_investment(
+    payload: InvestmentPreviewRequest,
+    _: User = Depends(get_current_user),
+) -> InvestmentPreviewResponse:
+    return calculate_investment_preview(payload)
+
+
+@router.get("/{investment_id}/schedule", response_model=InvestmentPreviewResponse)
+async def get_investment_schedule(
+    investment_id: int,
+    dias: int = 30,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> InvestmentPreviewResponse:
+    if dias <= 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Dias deve ser maior que zero")
+    investment = _get_investment_or_404(db, investment_id)
+    req = InvestmentPreviewRequest(
+        valor=Decimal(str(investment.valor)),
+        taxa_rendimento=Decimal(str(investment.taxa_rendimento)),
+        dias=dias,
+        tipo="composto" if investment.status == "ativo" else "simples",
+    )
+    return calculate_investment_preview(req)
+
+
 @router.get("", response_model=List[InvestmentResponse])
 async def list_investments(
     skip: int = 0,
     limit: int = 100,
     user_id: Optional[int] = None,
     db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
 ) -> List[Investment]:
     query = db.query(Investment)
     if user_id is not None:
@@ -33,12 +71,20 @@ async def list_investments(
 
 
 @router.get("/{investment_id}", response_model=InvestmentResponse)
-async def get_investment(investment_id: int, db: Session = Depends(get_db)) -> Investment:
+async def get_investment(
+    investment_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> Investment:
     return _get_investment_or_404(db, investment_id)
 
 
 @router.post("", response_model=InvestmentResponse, status_code=status.HTTP_201_CREATED)
-async def create_investment(payload: InvestmentCreate, db: Session = Depends(get_db)) -> Investment:
+async def create_investment(
+    payload: InvestmentCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> Investment:
     user = db.query(User).filter(User.id == payload.user_id).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario nao encontrado")
@@ -74,6 +120,7 @@ async def create_investment(payload: InvestmentCreate, db: Session = Depends(get
 
     db.commit()
     db.refresh(investment)
+    process_loan_queue(db)
     return investment
 
 
@@ -82,6 +129,7 @@ async def update_investment(
     investment_id: int,
     payload: InvestmentUpdate,
     db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
 ) -> Investment:
     investment = _get_investment_or_404(db, investment_id)
     update_data = payload.model_dump(exclude_unset=True)
@@ -94,7 +142,11 @@ async def update_investment(
 
 
 @router.post("/{investment_id}/redeem", response_model=InvestmentResponse)
-async def redeem_investment(investment_id: int, db: Session = Depends(get_db)) -> Investment:
+async def redeem_investment(
+    investment_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> Investment:
     investment = _get_investment_or_404(db, investment_id)
     if investment.status == "resgatado":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Investimento ja resgatado")
@@ -120,11 +172,16 @@ async def redeem_investment(investment_id: int, db: Session = Depends(get_db)) -
     db.add(investment)
     db.commit()
     db.refresh(investment)
+    process_loan_queue(db)
     return investment
 
 
 @router.delete("/{investment_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_investment(investment_id: int, db: Session = Depends(get_db)) -> Response:
+async def delete_investment(
+    investment_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> Response:
     investment = _get_investment_or_404(db, investment_id)
     if investment.status == "resgatado":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Investimento ja resgatado")
@@ -146,5 +203,6 @@ async def delete_investment(investment_id: int, db: Session = Depends(get_db)) -
     db.add(wallet)
     db.delete(investment)
     db.commit()
+    process_loan_queue(db)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

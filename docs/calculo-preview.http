@@ -1,0 +1,19 @@
+﻿POST /investments/preview
+{
+  "valor": 10000,
+  "taxa_rendimento": 0.12,
+  "dias": 30,
+  "tipo": "composto",
+  "capitalizacao": "mensal"
+}
+
+POST /loans/preview
+{
+  "valor": 5000,
+  "taxa_juros": 0.18,
+  "prazo_meses": 12,
+  "sistema": "price"
+}
+
+GET /investments/{id}/schedule
+GET /loans/{id}/schedule
