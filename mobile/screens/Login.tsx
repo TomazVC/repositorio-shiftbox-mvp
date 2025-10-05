@@ -100,8 +100,9 @@ export default function Login({ navigation }: Props) {
 
         <View style={styles.testCredentials}>
           <Text style={styles.testText}>Credenciais de teste:</Text>
-          <Text style={styles.testEmail}>joao@example.com / senha123</Text>
-          <Text style={styles.testEmail}>maria@example.com / senha123</Text>
+          <Text style={styles.testEmail}>teste1@shiftbox.com / teste123</Text>
+          <Text style={styles.testEmail}>teste2@shiftbox.com / teste456</Text>
+          <Text style={styles.testEmail}>teste3@shiftbox.com / teste789</Text>
         </View>
       </View>
     </ScrollView>
