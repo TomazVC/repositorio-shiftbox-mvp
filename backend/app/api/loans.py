@@ -1,20 +1,30 @@
 ﻿"""Loan API routes."""
-from datetime import datetime
+from datetime import datetime, date
+from decimal import Decimal
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.api.auth import get_current_user
 from app.db import get_db
 from app.models import Investment, Loan, Transaction, User, Wallet
 from app.schemas import (
     LoanApproval,
     LoanCreate,
     LoanPayment,
+    LoanPreviewRequest,
+    LoanPreviewResponse,
     LoanResponse,
     LoanRejection,
     LoanUpdate,
+)
+from app.services.finance_service import calculate_loan_preview
+from app.services.pool_service import (
+    next_queue_position,
+    process_loan_queue,
+    should_enqueue,
 )
 
 router = APIRouter(prefix="/loans", tags=["loans"])
@@ -40,6 +50,32 @@ def _ensure_wallet_for_user(db: Session, user_id: int) -> Wallet:
     return wallet
 
 
+@router.post("/preview", response_model=LoanPreviewResponse)
+async def preview_loan(
+    payload: LoanPreviewRequest,
+    _: User = Depends(get_current_user),
+) -> LoanPreviewResponse:
+    return calculate_loan_preview(payload)
+
+
+@router.get("/{loan_id}/schedule", response_model=LoanPreviewResponse)
+async def get_loan_schedule(
+    loan_id: int,
+    primeira_parcela: Optional[date] = None,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> LoanPreviewResponse:
+    loan = _get_loan_or_404(db, loan_id)
+    req = LoanPreviewRequest(
+        valor=Decimal(str(loan.valor)),
+        taxa_juros=Decimal(str(loan.taxa_juros)),
+        prazo_meses=loan.prazo_meses,
+        sistema="price",
+        primeira_parcela=primeira_parcela or (loan.created_at.date() if loan.created_at else date.today()),
+    )
+    return calculate_loan_preview(req)
+
+
 @router.get("", response_model=List[LoanResponse])
 async def list_loans(
     skip: int = 0,
@@ -47,6 +83,7 @@ async def list_loans(
     status_filter: Optional[str] = None,
     user_id: Optional[int] = None,
     db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
 ) -> List[Loan]:
     query = db.query(Loan)
     if status_filter:
@@ -57,12 +94,23 @@ async def list_loans(
 
 
 @router.get("/{loan_id}", response_model=LoanResponse)
-async def get_loan(loan_id: int, db: Session = Depends(get_db)) -> Loan:
+async def get_loan(
+    loan_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> Loan:
     return _get_loan_or_404(db, loan_id)
 
 
 @router.post("", response_model=LoanResponse, status_code=status.HTTP_201_CREATED)
-async def create_loan(payload: LoanCreate, db: Session = Depends(get_db)) -> Loan:
+async def create_loan(
+    payload: LoanCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Loan:
+    if current_user.id != payload.user_id and not current_user.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sem permissao para solicitar emprestimo para outro usuario")
+
     user = db.query(User).filter(User.id == payload.user_id).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario nao encontrado")
@@ -76,6 +124,10 @@ async def create_loan(payload: LoanCreate, db: Session = Depends(get_db)) -> Loa
         status="pendente",
     )
 
+    if should_enqueue(db, payload.valor):
+        loan.status = "fila"
+        loan.queue_position = next_queue_position(db)
+
     db.add(loan)
     db.commit()
     db.refresh(loan)
@@ -83,8 +135,16 @@ async def create_loan(payload: LoanCreate, db: Session = Depends(get_db)) -> Loa
 
 
 @router.patch("/{loan_id}", response_model=LoanResponse)
-async def update_loan(loan_id: int, payload: LoanUpdate, db: Session = Depends(get_db)) -> Loan:
+async def update_loan(
+    loan_id: int,
+    payload: LoanUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Loan:
     loan = _get_loan_or_404(db, loan_id)
+    if loan.user_id != current_user.id and not current_user.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sem permissao para alterar este emprestimo")
+
     update_data = payload.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(loan, key, value)
@@ -99,8 +159,14 @@ async def approve_loan(
     loan_id: int,
     payload: LoanApproval,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> Loan:
+    if not current_user.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Apenas administradores podem aprovar emprestimos")
+
     loan = _get_loan_or_404(db, loan_id)
+    if loan.status == "fila":
+        return loan
     if loan.status not in {"pendente", "reavaliacao"}:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Emprestimo nao esta pendente")
 
@@ -108,23 +174,22 @@ async def approve_loan(
         db.query(func.coalesce(func.sum(Investment.valor), 0))
         .filter(Investment.status == "ativo")
         .scalar()
-    )
+    ) or 0
 
     emprestado_total = (
         db.query(func.coalesce(func.sum(Loan.valor), 0))
         .filter(Loan.id != loan.id)
         .filter(Loan.status.in_(APPROVAL_STATUSES))
         .scalar()
-    )
+    ) or 0
 
-    if pool_total <= 0:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Pool nao possui recursos disponiveis")
-
-    if emprestado_total + loan.valor > pool_total * 0.8:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Limite de 80% do pool excedido para aprovacao",
-        )
+    if pool_total <= 0 or emprestado_total + loan.valor > pool_total * 0.8:
+        loan.status = "fila"
+        loan.queue_position = loan.queue_position or next_queue_position(db)
+        db.add(loan)
+        db.commit()
+        db.refresh(loan)
+        return loan
 
     if payload.taxa_juros is not None:
         loan.taxa_juros = payload.taxa_juros
@@ -133,6 +198,7 @@ async def approve_loan(
 
     loan.status = "ativo"
     loan.approved_at = datetime.utcnow()
+    loan.queue_position = None
 
     wallet = _ensure_wallet_for_user(db, loan.user_id)
     wallet.saldo += loan.valor
@@ -157,16 +223,22 @@ async def reject_loan(
     loan_id: int,
     payload: LoanRejection,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> Loan:
+    if not current_user.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Apenas administradores podem rejeitar emprestimos")
+
     loan = _get_loan_or_404(db, loan_id)
-    if loan.status != "pendente":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Apenas emprestimos pendentes podem ser rejeitados")
+    if loan.status not in {"pendente", "fila"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Apenas emprestimos pendentes ou na fila podem ser rejeitados")
 
     loan.status = "rejeitado"
     loan.motivo_rejeicao = payload.motivo_rejeicao
+    loan.queue_position = None
     db.add(loan)
     db.commit()
     db.refresh(loan)
+    process_loan_queue(db)
     return loan
 
 
@@ -175,8 +247,11 @@ async def pay_loan(
     loan_id: int,
     payload: LoanPayment,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> Loan:
     loan = _get_loan_or_404(db, loan_id)
+    if loan.user_id != current_user.id and not current_user.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sem permissao para pagar este emprestimo")
     if loan.status not in {"ativo", "pendente"}:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Emprestimo nao esta ativo")
 
@@ -185,10 +260,19 @@ async def pay_loan(
     if wallet.saldo < payload.valor_pagamento:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Saldo insuficiente na carteira")
 
-    wallet.saldo -= payload.valor_pagamento
-    loan.valor_pago += payload.valor_pagamento
+    valor_pagamento = Decimal(str(payload.valor_pagamento))
+    wallet.saldo -= float(valor_pagamento)
 
-    valor_total = loan.valor_total_com_juros
+    juros_pendentes = Decimal(str(loan.interest_accrued))
+    if juros_pendentes > 0:
+        abatimento_juros = min(valor_pagamento, juros_pendentes)
+        loan.interest_accrued = float(juros_pendentes - abatimento_juros)
+        valor_pagamento -= abatimento_juros
+
+    if valor_pagamento > 0:
+        loan.valor_pago += float(valor_pagamento)
+
+    valor_total = loan.valor_total_com_juros + loan.interest_accrued
     if loan.valor_pago >= valor_total:
         loan.status = "pago"
         loan.paid_at = datetime.utcnow()
@@ -197,8 +281,8 @@ async def pay_loan(
     transaction = Transaction(
         wallet_id=wallet.id,
         tipo="pagamento_emprestimo",
-        valor=payload.valor_pagamento,
-        descricao="Pagamento de parcela de emprestimo",
+        valor=float(payload.valor_pagamento),
+        descricao="Pagamento de emprestimo (juros priorizados)",
         related_loan_id=loan.id,
     )
 
@@ -207,16 +291,26 @@ async def pay_loan(
     db.add(loan)
     db.commit()
     db.refresh(loan)
+
+    process_loan_queue(db)
     return loan
 
 
 @router.delete("/{loan_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_loan(loan_id: int, db: Session = Depends(get_db)) -> Response:
+async def delete_loan(
+    loan_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Response:
+    if not current_user.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Apenas administradores podem remover emprestimos")
+
     loan = _get_loan_or_404(db, loan_id)
-    if loan.status not in {"pendente", "rejeitado"}:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="So e possivel excluir emprestimos pendentes ou rejeitados")
+    if loan.status not in {"pendente", "rejeitado", "fila"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="So e possivel excluir emprestimos pendentes, em fila ou rejeitados")
 
     db.delete(loan)
     db.commit()
+    process_loan_queue(db)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

@@ -12,6 +12,7 @@ class LoanBase(BaseModel):
     prazo_meses: int = Field(default=12, ge=1)
     status: str = Field(default="pendente", max_length=50)
     motivo_rejeicao: Optional[str] = Field(default=None, max_length=255)
+    queue_position: Optional[int] = None
 
 
 class LoanCreate(LoanBase):
@@ -25,6 +26,7 @@ class LoanUpdate(BaseModel):
     prazo_meses: Optional[int] = Field(default=None, ge=1)
     status: Optional[str] = Field(default=None, max_length=50)
     motivo_rejeicao: Optional[str] = Field(default=None, max_length=255)
+    queue_position: Optional[int] = Field(default=None, ge=1)
     approved_at: Optional[datetime] = None
     paid_at: Optional[datetime] = None
 

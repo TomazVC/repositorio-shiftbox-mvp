@@ -4,8 +4,9 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
+from app.api.auth import get_current_user
 from app.db import get_db
-from app.models import Transaction, Wallet
+from app.models import Transaction, User, Wallet
 from app.schemas import TransactionCreate, TransactionResponse, TransactionUpdate
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
@@ -38,6 +39,7 @@ async def list_transactions(
     wallet_id: Optional[int] = None,
     tipo: Optional[str] = None,
     db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
 ) -> List[Transaction]:
     query = db.query(Transaction)
     if wallet_id is not None:
@@ -48,12 +50,20 @@ async def list_transactions(
 
 
 @router.get("/{transaction_id}", response_model=TransactionResponse)
-async def get_transaction(transaction_id: int, db: Session = Depends(get_db)) -> Transaction:
+async def get_transaction(
+    transaction_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> Transaction:
     return _get_transaction_or_404(db, transaction_id)
 
 
 @router.post("", response_model=TransactionResponse, status_code=status.HTTP_201_CREATED)
-async def create_transaction(payload: TransactionCreate, db: Session = Depends(get_db)) -> Transaction:
+async def create_transaction(
+    payload: TransactionCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> Transaction:
     wallet = db.query(Wallet).filter(Wallet.id == payload.wallet_id).first()
     if not wallet:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Carteira nao encontrada")
@@ -86,6 +96,7 @@ async def update_transaction(
     transaction_id: int,
     payload: TransactionUpdate,
     db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
 ) -> Transaction:
     transaction = _get_transaction_or_404(db, transaction_id)
 
@@ -103,7 +114,11 @@ async def update_transaction(
 
 
 @router.delete("/{transaction_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_transaction(transaction_id: int, db: Session = Depends(get_db)) -> Response:
+async def delete_transaction(
+    transaction_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> Response:
     transaction = _get_transaction_or_404(db, transaction_id)
 
     if transaction.related_investment_id or transaction.related_loan_id:

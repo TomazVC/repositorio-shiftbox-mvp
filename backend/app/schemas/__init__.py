@@ -1,4 +1,12 @@
 ﻿"""Public schemas exports."""
+from .finance import (
+    InterestAccrualResult,
+    InvestmentPreviewRequest,
+    InvestmentPreviewResponse,
+    LoanInstallment,
+    LoanPreviewRequest,
+    LoanPreviewResponse,
+)
 from .user import (
     UserBase,
     UserCreate,
@@ -28,8 +36,19 @@ from .transaction import (
     TransactionResponse,
     TransactionUpdate,
 )
+from .kyc import (
+    KycDocumentCreate,
+    KycDocumentResponse,
+    KycDocumentReview,
+)
 
 __all__ = [
+    "InterestAccrualResult",
+    "InvestmentPreviewRequest",
+    "InvestmentPreviewResponse",
+    "LoanPreviewRequest",
+    "LoanPreviewResponse",
+    "LoanInstallment",
     "UserBase",
     "UserCreate",
     "UserResponse",
@@ -54,5 +73,7 @@ __all__ = [
     "TransactionCreate",
     "TransactionResponse",
     "TransactionUpdate",
+    "KycDocumentCreate",
+    "KycDocumentResponse",
+    "KycDocumentReview",
 ]
-
